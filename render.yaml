@@ -7,6 +7,9 @@ services:
     runtime: node
     rootDir: backend
     plan: free
+    # Co-locate with the Neon database (Singapore) — a cross-region backend↔DB
+    # link adds ~180ms per query, which compounds to multi-second API calls.
+    region: singapore
     branch: main
     # --include=dev is required: NestJS build tools (@nestjs/cli, typescript)
     # are devDependencies and NODE_ENV=production would otherwise skip them.
