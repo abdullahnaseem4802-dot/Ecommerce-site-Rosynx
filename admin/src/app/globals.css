@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* Light theme — matches the ROSYNX storefront (white · charcoal · copper).
+   Token NAMES are kept so existing pages adapt automatically. */
+@theme {
+  --color-ink: #f6f4f1; /* page background (warm off-white) */
+  --color-panel: #ffffff; /* cards / sidebar */
+  --color-panel-2: #f3f1ed; /* subtle fills / inputs */
+  --color-line: #e8e3dc; /* borders */
+  --color-line-soft: #f0ece6;
+  --color-muted: #8a837a; /* secondary text */
+  --color-fg: #1f1c19; /* charcoal text */
+  --color-copper: #b45309; /* brand copper (from site) */
+  --color-copper-light: #d97706;
+  --color-copper-dark: #92400e;
+  --color-good: #3f9d5f;
+  --color-warn: #c98a1e;
+  --color-bad: #d0483f;
+  --color-info: #3b7fc4;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(900px 500px at 100% -10%, rgba(180, 83, 9, 0.06), transparent 60%),
+    radial-gradient(700px 500px at -10% 0%, rgba(180, 83, 9, 0.04), transparent 55%),
+    var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #dcd6cd;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-panel-2);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 0, 0, 0.04),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}

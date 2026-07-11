@@ -1,0 +1,361 @@
+// ROSYNX — PostgreSQL schema (Neon). Clean & normalized — no WooCommerce EAV.
+// Money is stored as INTEGER CENTS everywhere. Prices set in a base currency;
+// display conversion (PKR -> USD/GBP/…) is done at the API/frontend layer.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled — runtime
+  directUrl = env("DIRECT_URL")   // direct — migrations
+}
+
+// ----------------------------- Enums -----------------------------
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  ON_HOLD
+  PAID
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  COD          // Cash on Delivery
+  BANK_TRANSFER
+  PAYMOB
+  CARD
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+// ----------------------------- Users -----------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          Role     @default(CUSTOMER)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
+  cart          Cart?
+
+  @@map("users")
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String? // "Home", "Office"
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  country    String
+  postalCode String?
+  phone      String?
+  isDefault  Boolean @default(false)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// --------------------------- Catalog -----------------------------
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  imageUrl    String?
+  sortOrder   Int       @default(0)
+  isFeatured  Boolean   @default(false)
+  products    Product[] @relation("ProductCategories")
+
+  @@map("categories")
+}
+
+model Product {
+  id             String    @id @default(cuid())
+  number         Int       @unique @default(autoincrement()) // stable numeric id for storefront routing
+  slug           String    @unique
+  name           String
+  sku            String? // optional stock-keeping unit
+  shortDesc      String?
+  description    String?   @db.Text
+  priceCents     Int // base-currency price in cents
+  salePriceCents Int? // optional sale price in cents
+  material       String?
+  colors         String[]  @default([])
+  badges         String[]  @default([]) // new | sale | limited
+  // real per-product specifications (shown on the storefront specs tab)
+  dimensions     String? // e.g. 12" × 8" × 6"
+  weight         String? // e.g. 1.4 kg
+  finish         String? // e.g. Hand-polished, food-safe
+  origin         String? // e.g. Handcrafted, Pakistan
+  care           String? // e.g. Wipe clean, avoid direct sunlight
+  inStock        Boolean   @default(true)
+  stockQty       Int       @default(0) // tracked inventory quantity
+  lowStockThreshold Int    @default(5) // alert when stockQty <= this
+  isActive       Boolean   @default(true)
+  ratingAvg      Decimal   @default(0) @db.Decimal(2, 1)
+  ratingCount    Int       @default(0)
+  totalSales     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  images     ProductImage[]
+  categories Category[]     @relation("ProductCategories")
+  reviews    Review[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  wishedBy   WishlistItem[]
+
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ----------------------------- Cart ------------------------------
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestToken String?   @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Int     @default(1)
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, productId])
+  @@map("wishlist_items")
+}
+
+// ---------------------------- Coupons ----------------------------
+
+model Coupon {
+  id              String     @id @default(cuid())
+  code            String     @unique
+  type            CouponType
+  value           Int // PERCENT: 0-100, FIXED: cents
+  minSubtotalCents Int       @default(0)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  usageLimit      Int?
+  usedCount       Int        @default(0)
+  isActive        Boolean    @default(true)
+
+  @@map("coupons")
+}
+
+// ---------------------------- Orders -----------------------------
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id])
+  email         String
+  status        OrderStatus   @default(PENDING)
+  currency      String        @default("USD")
+  subtotalCents Int
+  discountCents Int           @default(0)
+  shippingCents Int           @default(0)
+  totalCents    Int
+  couponCode    String?
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(UNPAID)
+  billing       Json? // address snapshot
+  shipping      Json? // address snapshot
+  createdAt     DateTime      @default(now())
+  paidAt        DateTime?
+  updatedAt     DateTime      @updatedAt
+
+  items    OrderItem[]
+  payments Payment[]
+
+  @@index([userId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id])
+  nameSnapshot  String
+  priceCents    Int // unit price snapshot
+  qty           Int
+  lineTotalCents Int
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider    PaymentMethod
+  providerRef String? // gateway transaction id
+  amountCents Int
+  status      PaymentStatus @default(UNPAID)
+  raw         Json? // webhook audit payload
+  createdAt   DateTime      @default(now())
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+// ---------------------------- Reviews ----------------------------
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int // 1-5
+  title      String?
+  body       String?  @db.Text
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([productId, userId])
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ------------------------ Contact messages -----------------------
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String?
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([isRead])
+  @@map("contact_messages")
+}
+
+// --------------------------- Subscribers -------------------------
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("subscribers")
+}
+
+// ------------------------- Store settings ------------------------
+// Single-row store configuration (id is always "singleton").
+
+model StoreSetting {
+  id                      String   @id @default("singleton")
+  storeName               String   @default("ROSYNX Marketplace")
+  supportEmail            String   @default("support@rosynx.com")
+  contactPhone            String   @default("")
+  whatsapp                String   @default("")
+  addressLine             String   @default("")
+  baseCurrency            String   @default("USD")
+  freeShipping            Boolean  @default(true)
+  freeShippingThresholdCents Int   @default(0) // 0 = free on all orders
+  flatShippingCents       Int      @default(0)
+  codEnabled              Boolean  @default(true)
+  bankTransferEnabled     Boolean  @default(true)
+  cardEnabled             Boolean  @default(false) // online gateway (sandbox)
+  bankDetails             String   @default("") // shown to customer for bank transfer
+  updatedAt               DateTime @updatedAt @default(now())
+
+  @@map("store_settings")
+}
+
+// ---------------------------- Blog -------------------------------
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String    @default("")
+  content     String    @default("") @db.Text
+  author      String    @default("ROSYNX")
+  category    String    @default("Craftsmanship")
+  imageUrl    String?
+  readTime    String    @default("4 min read")
+  isPublished Boolean   @default(true)
+  publishedAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isPublished])
+  @@map("blog_posts")
+}

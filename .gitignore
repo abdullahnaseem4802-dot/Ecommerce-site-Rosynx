@@ -1,0 +1,39 @@
+# ---- Dependencies ----
+node_modules/
+**/node_modules/
+
+# ---- Build output ----
+.next/
+**/.next/
+dist/
+**/dist/
+build/
+out/
+
+# ---- Secrets / environment (NEVER commit) ----
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# ---- Reference dump of the OLD WooCommerce site ----
+# Contains wp-config.php credentials + a SQL dump with real customer PII.
+# Reference-only; must NEVER be published.
+reference/
+
+# ---- Local docs / binaries not needed in the code repo ----
+*.docx
+*.sql
+
+# ---- Logs & caches ----
+*.log
+npm-debug.log*
+.turbo/
+.cache/
+
+# ---- OS / editor junk ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

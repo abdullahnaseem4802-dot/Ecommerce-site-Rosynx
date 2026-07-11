@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette — White · Charcoal · Copper (professional, high-contrast) */
+  /* Surfaces (main color = white) */
+  --color-cream: #ffffff;        /* primary background */
+  --color-cream-soft: #ffffff;   /* header / nav background */
+  --color-cream-card: #f6f6f4;   /* subtle card / section fill */
+  --color-blush: #f1efec;        /* soft neutral (hero fallback etc.) */
+  --color-blush-deep: #e6e3dd;
+
+  /* Ink (charcoal family for text + dark elements) */
+  --color-espresso: #191919;     /* darkest — headings / dark bands */
+  --color-coffee: #4a4a4a;       /* secondary text */
+  --color-ink: #1e1e1e;          /* body text */
+
+  /* Accent (copper — pulled from the logo) */
+  --color-brand: #b45309;
+  --color-brand-dark: #92400e;
+  --color-brand-light: #d97706;
+
+  --color-muted: #7b7b7b;
+  --color-line: #e7e7e7;
+
+  --color-sale: #dc2626;
+  --color-newtag: #3f7a52;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, "Times New Roman", serif;
+
+  /* Radii */
+  --radius-card: 16px;
+
+  /* Animations */
+  --animate-ripple: ripple 0.6s ease-out forwards;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+}
+
+@keyframes ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(34);
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+:root {
+  --background: var(--color-cream);
+  --foreground: var(--color-ink);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbar for horizontal scroll strips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

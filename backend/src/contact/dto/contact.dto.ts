@@ -1,0 +1,29 @@
+import {
+  IsBoolean,
+  IsEmail,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
+
+export class CreateContactDto {
+  @IsString()
+  @MinLength(2)
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
+
+  @IsString()
+  @MinLength(1)
+  message: string;
+}
+
+export class UpdateContactDto {
+  @IsBoolean()
+  isRead: boolean;
+}

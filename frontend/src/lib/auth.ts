@@ -1,0 +1,61 @@
+"use client";
+
+import { create } from "zustand";
+import { api, clearToken, getToken, setToken } from "@/lib/api";
+import { useShop } from "@/lib/store";
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+type AuthState = {
+  user: User | null;
+  ready: boolean; // true once we've attempted to restore the session
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => void;
+  restore: () => Promise<void>;
+};
+
+export const useAuth = create<AuthState>()((set) => ({
+  user: null,
+  ready: false,
+
+  login: async (email, password) => {
+    const res = await api.login(email, password);
+    setToken(res.accessToken);
+    set({ user: res.user });
+    await useShop.getState().mergeGuestCart();
+  },
+
+  register: async (name, email, password) => {
+    const res = await api.register(name, email, password);
+    setToken(res.accessToken);
+    set({ user: res.user });
+    await useShop.getState().mergeGuestCart();
+  },
+
+  logout: () => {
+    clearToken();
+    set({ user: null });
+    // clear the local cart/wishlist view (server data is left intact)
+    useShop.setState({ cart: [], wishlist: [] });
+  },
+
+  restore: async () => {
+    if (!getToken()) {
+      set({ ready: true });
+      return;
+    }
+    try {
+      const user = await api.me();
+      set({ user, ready: true });
+    } catch {
+      clearToken();
+      set({ user: null, ready: true });
+    }
+  },
+}));
