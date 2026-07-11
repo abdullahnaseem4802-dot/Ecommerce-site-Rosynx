@@ -8,7 +8,9 @@ services:
     rootDir: backend
     plan: free
     branch: main
-    buildCommand: npm install && npx prisma generate && npm run build
+    # --include=dev is required: NestJS build tools (@nestjs/cli, typescript)
+    # are devDependencies and NODE_ENV=production would otherwise skip them.
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npm run start:prod
     healthCheckPath: /api/v1/categories
     envVars:
