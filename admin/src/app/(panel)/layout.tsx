@@ -43,7 +43,8 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const STORE_URL = process.env.NEXT_PUBLIC_STORE_URL ?? "http://localhost:3000";
+const STORE_URL =
+  process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3000";
 
 export default function PanelLayout({
   children,
