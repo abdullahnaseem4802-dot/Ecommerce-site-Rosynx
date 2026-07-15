@@ -11,9 +11,13 @@ export const metadata: Metadata = {
 };
 
 // Static + ISR: the catalog is the same regardless of the ?category= filter
-// (filtering happens on the client), so this page can be edge-cached and
-// revalidated every 60s instead of re-rendering on every request.
-export const revalidate = 60;
+// (filtering happens on the client), so this page can be edge-cached.
+//
+// 5 minutes, not 60s: this is the heaviest page in the app (the whole catalog
+// is rendered for client-side filtering), so each regeneration is expensive.
+// Regenerating it every minute kept it permanently STALE and keeps the free-tier
+// API saturated. Admin edits show within 5 minutes.
+export const revalidate = 300;
 
 export default async function ShopPage() {
   const [products, categories] = await Promise.all([

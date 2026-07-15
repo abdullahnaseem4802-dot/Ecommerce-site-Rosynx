@@ -3,6 +3,8 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
+import { cachedJSON, TTL } from "@/lib/client-cache";
+import { loadSettings } from "@/lib/use-settings";
 
 /** Currencies the storefront can display prices in. */
 export const CURRENCIES = [
@@ -138,20 +140,21 @@ export const useCurrency = create<CurrencyState>()((set, get) => ({
     let base = "USD";
     let rates: Record<string, number> = { USD: 1 };
 
-    try {
-      const r = await api.getRates();
-      if (r?.rates) rates = r.rates;
-      if (r?.base) base = r.base;
-    } catch {
-      /* keep defaults */
-    }
+    // Fetch rates and settings CONCURRENTLY — they're independent, and awaiting
+    // them in series cost an extra round trip on every page load. Settings goes
+    // through the shared loader so it isn't requested twice per page.
+    const [r, settings] = await Promise.all([
+      cachedJSON<{ base: string; rates: Record<string, number> }>(
+        "rates",
+        TTL.rates,
+        () => api.getRates(),
+      ).catch(() => null),
+      loadSettings(),
+    ]);
 
-    try {
-      const settings = await api.getSettings();
-      if (settings?.baseCurrency) base = settings.baseCurrency;
-    } catch {
-      /* keep base */
-    }
+    if (r?.rates) rates = r.rates;
+    if (r?.base) base = r.base;
+    if (settings?.baseCurrency) base = settings.baseCurrency;
 
     if (rates[base] == null) rates = { ...rates, [base]: rates[base] ?? 1 };
 

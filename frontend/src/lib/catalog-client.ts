@@ -6,28 +6,30 @@
 
 import { useEffect, useState } from "react";
 import { fetchAllProducts, fetchCategories, type ApiCategory } from "./catalog";
+import { cachedJSON, peekCached, TTL } from "./client-cache";
 import type { Product } from "./data";
 
+// Kept as a synchronous mirror of the shared cache: cachedProducts() is called
+// from non-async code (the cart store) and must not await.
 let cache: Product[] | null = null;
-let inflight: Promise<Product[]> | null = null;
 
 /** Synchronous snapshot of the client catalog cache (empty until primed). */
-export const cachedProducts = (): Product[] => cache ?? [];
+export const cachedProducts = (): Product[] =>
+  cache ?? peekCached<Product[]>("catalog", TTL.catalog) ?? [];
 
+/**
+ * Loads the full catalog once and reuses it across navigations. This is the
+ * single biggest client payload (~148 products), and it used to be re-fetched
+ * on every page load because the cache lived only in module memory.
+ */
 export function primeCatalog(): Promise<Product[]> {
   if (cache) return Promise.resolve(cache);
-  if (!inflight) {
-    inflight = fetchAllProducts()
-      .then((p) => {
-        cache = p;
-        return p;
-      })
-      .catch(() => {
-        inflight = null;
-        return [];
-      });
-  }
-  return inflight;
+  return cachedJSON<Product[]>("catalog", TTL.catalog, () => fetchAllProducts())
+    .then((p) => {
+      cache = p;
+      return p;
+    })
+    .catch(() => []);
 }
 
 /** Returns the full live product list on the client (empty until loaded). */
@@ -61,28 +63,18 @@ export const findBySlug = (products: Product[], slug: string) =>
   products.find((p) => p.slug === slug);
 
 /* --- categories client cache --- */
-let catCache: ApiCategory[] | null = null;
-let catInflight: Promise<ApiCategory[]> | null = null;
 
 export function useCategories(): ApiCategory[] {
-  const [cats, setCats] = useState<ApiCategory[]>(catCache ?? []);
+  const [cats, setCats] = useState<ApiCategory[]>(
+    () => peekCached<ApiCategory[]>("categories", TTL.categories) ?? [],
+  );
   useEffect(() => {
-    if (catCache) {
-      setCats(catCache);
-      return;
-    }
     let alive = true;
-    if (!catInflight)
-      catInflight = fetchCategories()
-        .then((c) => {
-          catCache = c;
-          return c;
-        })
-        .catch(() => {
-          catInflight = null;
-          return [];
-        });
-    catInflight.then((c) => alive && setCats(c));
+    cachedJSON<ApiCategory[]>("categories", TTL.categories, () =>
+      fetchCategories(),
+    )
+      .then((c) => alive && setCats(c))
+      .catch(() => {});
     return () => {
       alive = false;
     };

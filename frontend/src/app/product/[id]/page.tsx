@@ -9,10 +9,13 @@ import { SectionHeading } from "@/components/home/section-heading";
 import { fetchAllProducts, fetchProductBySlug, fetchRelated } from "@/lib/catalog";
 
 // ISR: pre-render every product page at build, then serve from the edge cache
-// and revalidate every 5 min. New products (not in the build) still render on
+// and revalidate every 10 min. New products (not in the build) still render on
 // demand and cache. If the API is briefly unreachable at build, fall back to
 // on-demand rendering rather than failing the build.
-export const revalidate = 300;
+//
+// With 148 of these, a short window means a steady stream of regenerations
+// against a 0.1-CPU backend. Product details change rarely; 10 min is ample.
+export const revalidate = 600;
 
 export async function generateStaticParams() {
   try {

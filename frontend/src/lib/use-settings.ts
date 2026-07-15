@@ -6,39 +6,29 @@
 
 import { useEffect, useState } from "react";
 import { api, type StoreSettings } from "./api";
+import { cachedJSON, peekCached, TTL } from "./client-cache";
 
-let cache: StoreSettings | null = null;
-let inflight: Promise<StoreSettings | null> | null = null;
-
-function loadSettings(): Promise<StoreSettings | null> {
-  if (cache) return Promise.resolve(cache);
-  if (!inflight) {
-    inflight = api
-      .getSettings()
-      .then((s) => {
-        cache = s;
-        return s;
-      })
-      .catch(() => {
-        inflight = null;
-        return null;
-      });
-  }
-  return inflight;
+/**
+ * THE single place store settings are fetched. `currency.ts` imports this too —
+ * previously both modules fetched /settings independently, so every page load
+ * requested it twice.
+ */
+export function loadSettings(): Promise<StoreSettings | null> {
+  return cachedJSON<StoreSettings>("settings", TTL.settings, () =>
+    api.getSettings(),
+  ).catch(() => null);
 }
 
 /** Returns the public store settings on the client (null until loaded). */
 export function useSettings(): StoreSettings | null {
-  const [settings, setSettings] = useState<StoreSettings | null>(cache);
+  const [settings, setSettings] = useState<StoreSettings | null>(() =>
+    peekCached<StoreSettings>("settings", TTL.settings),
+  );
 
   useEffect(() => {
-    if (cache) {
-      setSettings(cache);
-      return;
-    }
     let alive = true;
     loadSettings().then((s) => {
-      if (alive) setSettings(s);
+      if (alive && s) setSettings(s);
     });
     return () => {
       alive = false;
