@@ -4,6 +4,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { RevalidateModule } from './revalidate/revalidate.module';
+import { KeepAliveModule } from './keepalive/keepalive.module';
 import { StorageModule } from './storage/storage.module';
 import { EmailModule } from './email/email.module';
 import { AuthModule } from './auth/auth.module';
@@ -29,6 +31,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    RevalidateModule,
+    KeepAliveModule,
     StorageModule,
     EmailModule,
     AuthModule,

@@ -46,6 +46,24 @@ services:
         sync: false
       - key: BASE_CURRENCY
         value: USD
-      # Keep Neon awake so the first request isn't a cold start
+      # Keep Neon awake so the first request isn't a cold start. Note this only
+      # runs while the process is alive — see SELF_URL below.
       - key: DB_KEEPALIVE
         value: "true"
+      # Keep-alive: the service pings its own PUBLIC url every 10 min, which
+      # arrives as inbound traffic and resets Render's ~15 min idle timer, so the
+      # free instance never spins down (a cold start costs the first visitor
+      # ~9s). Keeping the process alive also keeps DB_KEEPALIVE running, which
+      # stops Neon scaling to zero — one ping prevents both cold starts.
+      # An always-on free instance uses ~730 of the 750 free instance-hours/month,
+      # so this only works with a single free service. Unset to disable.
+      - key: SELF_URL
+        value: https://rosynx-api.onrender.com
+      # On-demand revalidation: after an admin edit the API calls the storefront
+      # so the change is live in seconds instead of waiting out the ISR window.
+      # STOREFRONT_URL must have no trailing slash. REVALIDATE_SECRET must match
+      # the value set on the Vercel storefront project.
+      - key: STOREFRONT_URL
+        value: https://rosynx-store.vercel.app
+      - key: REVALIDATE_SECRET
+        sync: false

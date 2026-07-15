@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevalidateService } from '../revalidate/revalidate.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
 function slugify(input: string): string {
@@ -16,7 +17,10 @@ function slugify(input: string): string {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidate: RevalidateService,
+  ) {}
 
   async findAll() {
     const cats = await this.prisma.category.findMany({
@@ -61,7 +65,7 @@ export class CategoriesService {
     const slug = dto.slug ? slugify(dto.slug) : slugify(dto.name);
     const existing = await this.prisma.category.findUnique({ where: { slug } });
     if (existing) throw new BadRequestException('Slug already exists');
-    return this.prisma.category.create({
+    const created = await this.prisma.category.create({
       data: {
         slug,
         name: dto.name,
@@ -71,6 +75,8 @@ export class CategoriesService {
         sortOrder: dto.sortOrder,
       },
     });
+    this.revalidate.category();
+    return created;
   }
 
   async update(id: string, dto: UpdateCategoryDto) {
@@ -82,7 +88,7 @@ export class CategoriesService {
       if (clash && clash.id !== id)
         throw new BadRequestException('Slug already exists');
     }
-    return this.prisma.category.update({
+    const updated = await this.prisma.category.update({
       where: { id },
       data: {
         name: dto.name,
@@ -93,6 +99,8 @@ export class CategoriesService {
         sortOrder: dto.sortOrder,
       },
     });
+    this.revalidate.category();
+    return updated;
   }
 
   async remove(id: string) {
@@ -103,6 +111,7 @@ export class CategoriesService {
       data: { products: { set: [] } },
     });
     await this.prisma.category.delete({ where: { id } });
+    this.revalidate.category();
     return { deleted: true };
   }
 

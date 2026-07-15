@@ -5,6 +5,7 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { serializeProduct } from './product.serializer';
+import { RevalidateService } from '../revalidate/revalidate.service';
 
 function slugify(input: string): string {
   return input
@@ -21,7 +22,10 @@ const withRelations = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidate: RevalidateService,
+  ) {}
 
   async findAll(q: QueryProductsDto) {
     const page = q.page ?? 1;
@@ -132,6 +136,7 @@ export class ProductsService {
       },
       include: withRelations,
     });
+    this.revalidate.product(product.number);
     return serializeProduct(product);
   }
 
@@ -166,18 +171,23 @@ export class ProductsService {
       },
       include: withRelations,
     });
+    this.revalidate.product(product.number);
     return serializeProduct(product);
   }
 
   async remove(id: string) {
-    await this.ensureExists(id);
+    const found = await this.ensureExists(id);
     await this.prisma.product.delete({ where: { id } });
+    this.revalidate.product(found.number);
     return { deleted: true };
   }
 
+  /** Throws if the product is missing; returns it so callers can read fields
+   *  (e.g. `number`, needed to revalidate the storefront page before delete). */
   private async ensureExists(id: string) {
     const found = await this.prisma.product.findUnique({ where: { id } });
     if (!found) throw new NotFoundException('Product not found');
+    return found;
   }
 
   private orderBy(sort?: string): Prisma.ProductOrderByWithRelationInput {

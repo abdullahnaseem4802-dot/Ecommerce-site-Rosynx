@@ -4,10 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevalidateService } from '../revalidate/revalidate.service';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidate: RevalidateService,
+  ) {}
 
   async list(slug: string) {
     const product = await this.prisma.product.findUnique({ where: { slug } });
@@ -94,19 +98,22 @@ export class ReviewsService {
     return { deleted: true };
   }
 
-  /** Recalculate the product's average rating + count. */
+  /** Recalculate the product's average rating + count. Also refreshes the
+   *  storefront: the rating is rendered into the product and shop pages, and
+   *  every review path (new review, approve/unapprove, delete) lands here. */
   private async recompute(productId: string) {
     const agg = await this.prisma.review.aggregate({
       where: { productId, isApproved: true },
       _avg: { rating: true },
       _count: true,
     });
-    await this.prisma.product.update({
+    const product = await this.prisma.product.update({
       where: { id: productId },
       data: {
         ratingAvg: Number((agg._avg.rating ?? 0).toFixed(1)),
         ratingCount: agg._count,
       },
     });
+    this.revalidate.product(product.number);
   }
 }
