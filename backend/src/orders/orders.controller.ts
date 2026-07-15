@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
@@ -16,7 +15,6 @@ import { PaymobService } from '../payments/paymob.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { Public } from '../auth/decorators/public.decorator';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -43,24 +41,31 @@ export class OrdersController {
    * honest test gateway page calls it directly. The service refuses if a real
    * gateway is configured.
    */
-  @Public()
+  /**
+   * Requires auth and ownership. This endpoint marks an order PAID, and its
+   * only other guard is "no real gateway configured" — which is currently true,
+   * so leaving it public let anyone who knew an order number mark that order
+   * paid (including their own COD order).
+   */
+  @UseGuards(JwtAuthGuard)
   @Post(':orderNumber/sandbox-pay')
-  sandboxPay(@Param('orderNumber') orderNumber: string) {
-    return this.orders.sandboxPay(orderNumber);
+  sandboxPay(@Req() req: any, @Param('orderNumber') orderNumber: string) {
+    return this.orders.sandboxPay(orderNumber, req.user);
   }
 
-  @Public()
-  @UseGuards(OptionalJwtAuthGuard)
+  /**
+   * Checkout requires an account. The storefront already forces sign-in before
+   * an item can reach the cart; enforcing it here too is what actually
+   * guarantees that every order in the database belongs to a real customer,
+   * rather than relying on the client-side gate not being bypassed.
+   *
+   * Cost is nil — the request is authenticated either way; this only removes
+   * the anonymous fallback.
+   */
+  @UseGuards(JwtAuthGuard)
   @Post('checkout')
-  checkout(
-    @Req() req: any,
-    @Headers('x-guest-token') guestToken: string,
-    @Body() dto: CreateOrderDto,
-  ) {
-    const identity = req.user?.id
-      ? { userId: req.user.id }
-      : { guestToken: dto.guestToken ?? guestToken };
-    return this.orders.checkout(identity, dto, req.user?.id);
+  checkout(@Req() req: any, @Body() dto: CreateOrderDto) {
+    return this.orders.checkout({ userId: req.user.id }, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -69,11 +74,12 @@ export class OrdersController {
     return this.orders.myOrders(userId);
   }
 
-  @Public()
-  @UseGuards(OptionalJwtAuthGuard)
+  // Requires auth: orders always belong to an account now, so an anonymous
+  // lookup by orderNumber can only ever be someone guessing.
+  @UseGuards(JwtAuthGuard)
   @Get(':orderNumber')
   getOne(@Req() req: any, @Param('orderNumber') orderNumber: string) {
-    return this.orders.getByNumber(orderNumber, req.user ?? undefined);
+    return this.orders.getByNumber(orderNumber, req.user);
   }
 
   // ---------------- Admin ----------------

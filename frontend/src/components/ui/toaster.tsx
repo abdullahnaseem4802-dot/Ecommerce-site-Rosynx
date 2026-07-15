@@ -13,8 +13,8 @@ const accents: Record<ToastKind, { ring: string; icon: React.ElementType }> = {
 };
 
 /**
- * Global toast host. Mounted once in the root layout. Bottom-left so it never
- * sits under the floating WhatsApp button (bottom-right).
+ * Global toast host. Mounted once in the root layout. Top-right, below the
+ * sticky header so it never covers the nav or the cart icon it refers to.
  */
 export function Toaster() {
   const toasts = useToasts((s) => s.toasts);
@@ -24,7 +24,7 @@ export function Toaster() {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed bottom-4 left-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:bottom-6 sm:left-6"
+      className="pointer-events-none fixed right-4 top-24 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:right-6 sm:top-28"
     >
       <AnimatePresence initial={false}>
         {toasts.map((t) => {
@@ -33,9 +33,9 @@ export function Toaster() {
             <motion.div
               key={t.id}
               layout
-              initial={{ opacity: 0, y: 16, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -24, scale: 0.96 }}
+              initial={{ opacity: 0, x: 24, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 24, scale: 0.96 }}
               transition={{ type: "spring", stiffness: 420, damping: 32 }}
               className="pointer-events-auto flex items-start gap-3 rounded-card border border-line bg-cream-soft p-3 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.18)]"
             >

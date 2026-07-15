@@ -24,7 +24,13 @@ reference/
 
 # ---- Local docs / binaries not needed in the code repo ----
 *.docx
+# Keeps stray database dumps out of the repo. The real PII risk (the old
+# WooCommerce APP-DATA.SQL) lives under reference/, which is ignored above.
 *.sql
+# ...but Prisma migrations ARE source code and must be versioned — without this
+# exception the blanket *.sql rule silently drops every migration, leaving the
+# repo with no schema history at all.
+!backend/prisma/migrations/**/*.sql
 
 # ---- Logs & caches ----
 *.log

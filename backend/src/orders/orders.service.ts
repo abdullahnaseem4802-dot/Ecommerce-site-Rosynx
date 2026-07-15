@@ -10,6 +10,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   Prisma,
+  Role,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CartService, CartIdentity } from '../cart/cart.service';
@@ -165,18 +166,15 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    // Admins see everything.
-    if (user?.role !== 'ADMIN') {
-      if (order.userId) {
-        // Owned by an account: only that account may read it. An anonymous
-        // caller who guessed the orderNumber must NOT get the customer's
-        // email + home address.
-        if (order.userId !== user?.id) throw new ForbiddenException();
-      } else if (user) {
-        // Guest order: readable anonymously by orderNumber (the only way a
-        // guest can see their own order), but never by a different account.
-        throw new ForbiddenException();
-      }
+    // Admins see everything. Everyone else must own the order.
+    //
+    // Checkout now requires an account, so every new order has a userId and
+    // nobody legitimately needs to look an order up anonymously. Any remaining
+    // userId-less orders are pre-gate legacy rows; leaving them readable by
+    // orderNumber alone would expose the customer's email and home address to
+    // anyone who guessed it. Those are admin-only now.
+    if (user?.role !== Role.ADMIN && order.userId !== user?.id) {
+      throw new ForbiddenException();
     }
     return this.serialize(order);
   }
@@ -225,7 +223,10 @@ export class OrdersService {
    * honest test gateway. Refuses outright if a real gateway (Paymob) is
    * configured — we never fake a real payment.
    */
-  async sandboxPay(orderNumber: string) {
+  async sandboxPay(
+    orderNumber: string,
+    user?: { id: string; role: string },
+  ) {
     if (this.paymob.isConfigured)
       throw new ForbiddenException(
         'Sandbox payment is disabled because a real card gateway is configured.',
@@ -235,6 +236,16 @@ export class OrdersService {
       where: { orderNumber },
     });
     if (!order) throw new NotFoundException('Order not found');
+
+    // Only the customer who placed the order (or an admin) may confirm it.
+    // Without this, knowing an order number is enough to mark it paid.
+    if (
+      user &&
+      user.role !== Role.ADMIN &&
+      order.userId &&
+      order.userId !== user.id
+    )
+      throw new ForbiddenException();
 
     const updated = await this.prisma.order.update({
       where: { orderNumber },
