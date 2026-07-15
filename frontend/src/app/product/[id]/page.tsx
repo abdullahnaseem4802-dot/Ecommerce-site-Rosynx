@@ -8,6 +8,21 @@ import { ProductCard } from "@/components/product/product-card";
 import { SectionHeading } from "@/components/home/section-heading";
 import { fetchAllProducts, fetchProductBySlug, fetchRelated } from "@/lib/catalog";
 
+// ISR: pre-render every product page at build, then serve from the edge cache
+// and revalidate every 5 min. New products (not in the build) still render on
+// demand and cache. If the API is briefly unreachable at build, fall back to
+// on-demand rendering rather than failing the build.
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  try {
+    const all = await fetchAllProducts();
+    return all.map((p) => ({ id: String(p.id) }));
+  } catch {
+    return [];
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {

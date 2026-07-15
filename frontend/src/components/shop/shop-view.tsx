@@ -25,11 +25,9 @@ import { Filters, defaultFilters, type ShopFilters } from "./filters";
 const PAGE_SIZES = [12, 24, 48];
 
 export function ShopView({
-  initialCategory,
   products,
   categories,
 }: {
-  initialCategory?: string;
   products: Product[];
   categories: ApiCategory[];
 }) {
@@ -42,9 +40,16 @@ export function ShopView({
 
   const [filters, setFilters] = useState<ShopFilters>({
     ...defaultFilters,
-    categories: initialCategory ? [initialCategory] : [],
     price: [bounds.min, bounds.max],
   });
+
+  // Apply a ?category= deep-link AFTER mount (read from the URL on the client).
+  // Doing this here — instead of on the server via searchParams — keeps the
+  // /shop page statically renderable so Vercel can edge-cache it.
+  useEffect(() => {
+    const cat = new URLSearchParams(window.location.search).get("category");
+    if (cat) setFilters((f) => ({ ...f, categories: [cat] }));
+  }, []);
   const [sort, setSort] = useState("featured");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [pageSize, setPageSize] = useState(12);

@@ -10,26 +10,16 @@ export const metadata: Metadata = {
     "Browse handcrafted luxury décor — rosewood, onyx, stone, leather and more. Filter by category, material, price and rating.",
 };
 
-export default async function ShopPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const sp = await searchParams;
-  const categorySlug = typeof sp.category === "string" ? sp.category : undefined;
+// Static + ISR: the catalog is the same regardless of the ?category= filter
+// (filtering happens on the client), so this page can be edge-cached and
+// revalidated every 60s instead of re-rendering on every request.
+export const revalidate = 60;
 
+export default async function ShopPage() {
   const [products, categories] = await Promise.all([
     fetchAllProducts(),
     fetchCategories(),
   ]);
-  const category = categorySlug
-    ? categories.find((c) => c.slug === categorySlug)
-    : undefined;
-
-  const title = category ? category.name.replace(" Collection", "") : "Shop All";
-  const subtitle = category
-    ? category.description ?? "Explore our full collection of handcrafted treasures."
-    : "Explore our full collection of handcrafted treasures.";
 
   return (
     <div className="pb-16">
@@ -41,7 +31,6 @@ export default async function ShopPage({
               items={[
                 { label: "Home", href: "/" },
                 { label: "Shop", href: "/shop" },
-                ...(category ? [{ label: title }] : []),
               ]}
             />
           </div>
@@ -49,18 +38,16 @@ export default async function ShopPage({
             ROSYNX Marketplace
           </p>
           <h1 className="mt-0.5 font-serif text-2xl font-bold text-espresso sm:text-3xl">
-            {title}
+            Shop All
           </h1>
-          <p className="mx-auto mt-1 max-w-xl text-sm text-muted">{subtitle}</p>
+          <p className="mx-auto mt-1 max-w-xl text-sm text-muted">
+            Explore our full collection of handcrafted treasures.
+          </p>
         </Container>
       </div>
 
       <Container className="pt-6">
-        <ShopView
-          initialCategory={categorySlug}
-          products={products}
-          categories={categories}
-        />
+        <ShopView products={products} categories={categories} />
       </Container>
     </div>
   );
