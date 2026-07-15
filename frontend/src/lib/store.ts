@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 import type { Product } from "@/lib/data";
 import { primeCatalog, cachedProducts } from "@/lib/catalog-client";
 import { api, getToken, type ApiCart } from "@/lib/api";
+import { toast } from "@/lib/toast";
 
 export type CartLine = {
   id: number;
@@ -102,7 +103,24 @@ export const useShop = create<ShopState>()(
         api
           .addToCart(p.apiId, qty)
           .then((c) => set({ cart: toLines(c) }))
-          .catch(() => {});
+          .catch((err: Error) => {
+            // Roll the optimistic add back. Without this the item looks added
+            // and then silently disappears on the next hydrate().
+            set((s) => {
+              const existing = s.cart.find((l) => l.id === p.id);
+              if (!existing) return s;
+              return existing.qty <= qty
+                ? { cart: s.cart.filter((l) => l.id !== p.id) }
+                : {
+                    cart: s.cart.map((l) =>
+                      l.id === p.id ? { ...l, qty: l.qty - qty } : l,
+                    ),
+                  };
+            });
+            toast.error("Couldn't add to cart", {
+              description: err?.message || "Please try again.",
+            });
+          });
       },
 
       removeFromCart: (id) => {

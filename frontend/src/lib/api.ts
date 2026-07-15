@@ -154,6 +154,20 @@ export const api = {
   getOrder: (orderNumber: string) =>
     request<OrderSummary>("GET", `/orders/${orderNumber}`),
 
+  // saved addresses (the checkout address book)
+  getAddresses: () => request<ApiAddress[]>("GET", "/addresses"),
+  createAddress: (body: AddressInput) =>
+    request<ApiAddress>("POST", "/addresses", body),
+  updateAddress: (id: string, body: Partial<AddressInput>) =>
+    request<ApiAddress>("PATCH", `/addresses/${id}`, body),
+  deleteAddress: (id: string) => request<void>("DELETE", `/addresses/${id}`),
+
+  // support tickets
+  myTickets: () => request<Ticket[]>("GET", "/support/mine"),
+  getTicket: (id: string) => request<Ticket>("GET", `/support/${id}`),
+  replyToTicket: (id: string, body: string) =>
+    request<Ticket>("POST", `/support/${id}/reply`, { body }),
+
   // reviews
   getReviews: (slug: string) =>
     request<ApiReview[]>("GET", `/products/${slug}/reviews`),
@@ -216,4 +230,58 @@ export interface OrderSummary {
   discount: number;
   createdAt: string;
   items: { name: string; price: number; qty: number; lineTotal: number }[];
+  /** Address snapshot taken at checkout. */
+  shipping?: OrderAddress | null;
+  /** Status timeline, oldest first — powers the tracking view. */
+  events?: OrderEvent[];
+}
+
+export interface OrderAddress {
+  name?: string;
+  phone?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+}
+
+export interface OrderEvent {
+  status: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface ApiAddress {
+  id: string;
+  label?: string | null;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state?: string | null;
+  country: string;
+  postalCode?: string | null;
+  phone?: string | null;
+  isDefault: boolean;
+}
+
+export type AddressInput = Omit<ApiAddress, "id">;
+
+export interface TicketReply {
+  id: string;
+  body: string;
+  fromAdmin: boolean;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  subject?: string | null;
+  message: string;
+  status: "OPEN" | "ANSWERED" | "CLOSED";
+  createdAt: string;
+  updatedAt: string;
+  replies: TicketReply[];
 }

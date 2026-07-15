@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, Heart, ShoppingBag, Star } from "lucide-react";
 import type { Product } from "@/lib/data";
 import { useHydrated, useShop } from "@/lib/store";
+import { useAddToCart } from "@/lib/use-add-to-cart";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ProductBadges } from "./product-badge";
@@ -19,7 +20,7 @@ export function ProductCard({ product }: { product: Product }) {
 
   const wished = useShop((s) => s.wishlist.includes(product.id));
   const toggleWishlist = useShop((s) => s.toggleWishlist);
-  const addToCart = useShop((s) => s.addToCart);
+  const addToCart = useAddToCart();
 
   const discount = product.oldPrice
     ? `-${Math.round((1 - product.price / product.oldPrice) * 100)}%`

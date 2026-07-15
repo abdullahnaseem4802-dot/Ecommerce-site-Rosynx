@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Heart, Package, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useHydrated, useShop } from "@/lib/store";
@@ -135,11 +136,22 @@ function AuthForm() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const login = useAuth((s) => s.login);
   const register = useAuth((s) => s.register);
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirect, setRedirect] = useState<string | null>(null);
+
+  // Read ?redirect= from the URL after mount rather than via useSearchParams,
+  // which would force a Suspense boundary / CSR bailout on this route.
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get("redirect");
+    // Only ever return to a path on this site — never an absolute URL, which
+    // would turn the login form into an open redirect.
+    if (r && r.startsWith("/") && !r.startsWith("//")) setRedirect(r);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +168,7 @@ function AuthForm() {
     try {
       if (mode === "register") await register(name.trim(), email, password);
       else await login(email, password);
+      if (redirect) router.push(redirect);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -168,6 +181,12 @@ function AuthForm() {
       <PageBanner title="My Account" crumb="Account" />
       <Container>
         <div className="mx-auto max-w-md rounded-2xl border border-line/60 bg-white p-8">
+          {redirect && (
+            <p className="mb-5 rounded-xl bg-cream-card px-4 py-3 text-center text-sm text-coffee">
+              Please sign in or create an account to continue shopping. We&apos;ll
+              take you straight back.
+            </p>
+          )}
           <div className="mb-6 flex rounded-full bg-cream-card p-1">
             {(["login", "register"] as const).map((m) => (
               <button

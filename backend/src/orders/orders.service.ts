@@ -18,6 +18,12 @@ import { EmailService } from '../email/email.service';
 import { PaymobService } from '../payments/paymob.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
+/** Every read path returns items + the status timeline (oldest first). */
+const ORDER_INCLUDE = {
+  items: true,
+  events: { orderBy: { createdAt: 'asc' } },
+} satisfies Prisma.OrderInclude;
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -90,8 +96,11 @@ export class OrdersService {
             status: paymentStatus,
           },
         },
+        events: {
+          create: { status, note: 'Order placed.' },
+        },
       },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
 
     if (couponCode) await this.coupons.incrementUsage(couponCode);
@@ -144,7 +153,7 @@ export class OrdersService {
     const orders = await this.prisma.order.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
     return orders.map((o) => this.serialize(o));
   }
@@ -152,16 +161,23 @@ export class OrdersService {
   async getByNumber(orderNumber: string, user?: { id: string; role: string }) {
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
     if (!order) throw new NotFoundException('Order not found');
-    if (
-      user &&
-      user.role !== 'ADMIN' &&
-      order.userId &&
-      order.userId !== user.id
-    )
-      throw new ForbiddenException();
+
+    // Admins see everything.
+    if (user?.role !== 'ADMIN') {
+      if (order.userId) {
+        // Owned by an account: only that account may read it. An anonymous
+        // caller who guessed the orderNumber must NOT get the customer's
+        // email + home address.
+        if (order.userId !== user?.id) throw new ForbiddenException();
+      } else if (user) {
+        // Guest order: readable anonymously by orderNumber (the only way a
+        // guest can see their own order), but never by a different account.
+        throw new ForbiddenException();
+      }
+    }
     return this.serialize(order);
   }
 
@@ -171,12 +187,12 @@ export class OrdersService {
     const orders = await this.prisma.order.findMany({
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
     return orders.map((o) => this.serialize(o));
   }
 
-  async updateStatus(id: string, status: OrderStatus) {
+  async updateStatus(id: string, status: OrderStatus, note?: string) {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
     const paidStatuses: OrderStatus[] = [
@@ -185,6 +201,9 @@ export class OrdersService {
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
     ];
+    // Only timeline a real transition — re-selecting the same value in the
+    // admin UI must not add a duplicate row.
+    const changed = order.status !== status;
     const updated = await this.prisma.order.update({
       where: { id },
       data: {
@@ -194,8 +213,9 @@ export class OrdersService {
           : undefined,
         paidAt:
           paidStatuses.includes(status) && !order.paidAt ? new Date() : undefined,
+        events: changed ? { create: { status, note } } : undefined,
       },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
     return this.serialize(updated);
   }
@@ -230,20 +250,39 @@ export class OrdersService {
             providerRef: `SANDBOX-${Date.now().toString(36).toUpperCase()}`,
           },
         },
+        events:
+          order.status !== OrderStatus.PROCESSING
+            ? {
+                create: {
+                  status: OrderStatus.PROCESSING,
+                  note: 'Sandbox card payment confirmed.',
+                },
+              }
+            : undefined,
       },
-      include: { items: true },
+      include: ORDER_INCLUDE,
     });
     return this.serialize(updated);
   }
 
   /** Called by the Paymob webhook when a card payment succeeds. */
   async markPaidByNumber(orderNumber: string) {
-    await this.prisma.order.updateMany({
+    const order = await this.prisma.order.findUnique({ where: { orderNumber } });
+    if (!order) return;
+    // Gateways retry webhooks — don't stack duplicate PAID events.
+    if (order.status === OrderStatus.PAID) return;
+    await this.prisma.order.update({
       where: { orderNumber },
       data: {
         status: OrderStatus.PAID,
         paymentStatus: PaymentStatus.PAID,
-        paidAt: new Date(),
+        paidAt: order.paidAt ?? new Date(),
+        events: {
+          create: {
+            status: OrderStatus.PAID,
+            note: 'Card payment confirmed by gateway.',
+          },
+        },
       },
     });
   }
@@ -307,12 +346,17 @@ export class OrdersService {
       email: o.email,
       subtotal: o.subtotalCents / 100,
       discount: o.discountCents / 100,
-      shipping: o.shippingCents / 100,
+      // `shipping` is the address snapshot (what the storefront's tracking page
+      // reads). The shipping *cost* is `shippingCost` — it used to be `shipping`,
+      // but nothing consumed it under that name.
+      shipping: o.shipping,
+      shippingCost: o.shippingCents / 100,
       total: o.totalCents / 100,
       subtotalCents: o.subtotalCents,
       totalCents: o.totalCents,
       couponCode: o.couponCode,
       billing: o.billing,
+      // Kept for the admin panel, which reads `shippingAddress`.
       shippingAddress: o.shipping,
       items: (o.items ?? []).map((i: any) => ({
         productId: i.productId,
@@ -320,6 +364,11 @@ export class OrdersService {
         price: i.priceCents / 100,
         qty: i.qty,
         lineTotal: i.lineTotalCents / 100,
+      })),
+      events: (o.events ?? []).map((e: any) => ({
+        status: e.status,
+        note: e.note,
+        createdAt: e.createdAt,
       })),
       createdAt: o.createdAt,
       paidAt: o.paidAt,

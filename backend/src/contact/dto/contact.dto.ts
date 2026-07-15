@@ -1,8 +1,11 @@
+import { TicketStatus } from '@prisma/client';
 import {
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -24,6 +27,18 @@ export class CreateContactDto {
 }
 
 export class UpdateContactDto {
+  @IsOptional()
   @IsBoolean()
-  isRead: boolean;
+  isRead?: boolean;
+
+  @IsOptional()
+  @IsEnum(TicketStatus)
+  status?: TicketStatus;
+}
+
+export class ReplyDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  body: string;
 }

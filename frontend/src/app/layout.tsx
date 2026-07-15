@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { FloatingWhatsApp } from "@/components/layout/floating-whatsapp";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { StoreSync } from "@/components/providers/store-sync";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -46,6 +47,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <SiteFooter />
         <FloatingWhatsApp />
+        <Toaster />
       </body>
     </html>
   );

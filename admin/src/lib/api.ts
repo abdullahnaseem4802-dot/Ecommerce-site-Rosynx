@@ -193,9 +193,42 @@ export interface Customer {
   name: string;
   email: string;
   phone: string | null;
+  isActive: boolean;
   orders: number;
   totalSpent: number;
   joinedAt: string;
+}
+
+export interface CustomerAddress {
+  id: string;
+  label: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string | null;
+  country: string;
+  postalCode: string | null;
+  phone: string | null;
+  isDefault: boolean;
+}
+
+/** GET /admin/customers/:id — the customer detail view. */
+export interface CustomerDetail {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  isActive: boolean;
+  joinedAt: string;
+  ordersCount: number;
+  totalSpent: number;
+  orders: {
+    orderNumber: string;
+    status: string;
+    total: number;
+    createdAt: string;
+  }[];
+  addresses: CustomerAddress[];
 }
 
 export interface AdminReview {
@@ -253,6 +286,16 @@ export interface StoreSettings {
   bankDetails: string;
 }
 
+export type TicketStatus = "OPEN" | "ANSWERED" | "CLOSED";
+
+export interface ContactReply {
+  id: string;
+  body: string;
+  fromAdmin: boolean;
+  authorName: string;
+  createdAt: string;
+}
+
 export interface ContactMessage {
   id: string;
   name: string;
@@ -260,7 +303,10 @@ export interface ContactMessage {
   subject: string | null;
   message: string;
   isRead: boolean;
+  status: TicketStatus;
   createdAt: string;
+  updatedAt: string;
+  replies: ContactReply[];
 }
 
 export interface Subscriber {

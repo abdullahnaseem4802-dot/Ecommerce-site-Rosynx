@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock } from "lucide-react";
+import { Check, Loader2, Lock, MapPin } from "lucide-react";
 import { useCartTotal, useHydrated, useShop } from "@/lib/store";
-import { api, getGuestToken, type StoreSettings } from "@/lib/api";
+import {
+  api,
+  getGuestToken,
+  type AddressInput,
+  type ApiAddress,
+  type StoreSettings,
+} from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { Combobox } from "./Combobox";
-import { PhoneField } from "./PhoneField";
+import { PhoneField, type DialOption } from "./PhoneField";
 import {
   countryOptions,
   dialOptions,
@@ -54,6 +61,46 @@ const required: (keyof Form)[] = [
   "country",
 ];
 
+/**
+ * Saved addresses persist country/state as *names*, matching what the order
+ * shipping snapshot stores and what the Comboboxes display (their options are
+ * `{ value: iso2, label: name }` and they select by label). Mapping a name back
+ * to its ISO2 is what re-arms the cascading state/city datasets on load.
+ */
+const isoForCountry = (name: string) =>
+  countryOptions.find((o) => o.label === name)?.value ?? "";
+
+const isoForState = (countryIso: string, name: string) =>
+  countryIso && name
+    ? (stateOptions(countryIso).find((o) => o.label === name)?.value ?? "")
+    : "";
+
+/** Split a stored "+92 300…" phone back into a dial ISO + local number. */
+function splitPhone(value: string): { iso?: string; number: string } {
+  const raw = value.trim();
+  let best: DialOption | undefined;
+  for (const d of dialOptions) {
+    if (raw.startsWith(d.dialCode) && (!best || d.dialCode.length > best.dialCode.length)) {
+      best = d;
+    }
+  }
+  if (!best) return { number: raw };
+  return { iso: best.isoCode, number: raw.slice(best.dialCode.length).trim() };
+}
+
+const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+
+/** Do the typed fields already describe a saved address? (phone ignored — formatting noise) */
+const sameAddress = (a: ApiAddress, b: AddressInput) =>
+  norm(a.line1) === norm(b.line1) &&
+  norm(a.city) === norm(b.city) &&
+  norm(a.state) === norm(b.state) &&
+  norm(a.country) === norm(b.country) &&
+  norm(a.postalCode) === norm(b.postalCode);
+
+const summarize = (a: ApiAddress) =>
+  [a.line1, a.city, a.state, a.country].filter(Boolean).join(", ");
+
 export default function CheckoutPage() {
   const hydrated = useHydrated();
   const router = useRouter();
@@ -80,11 +127,130 @@ export default function CheckoutPage() {
   const [dialIso, setDialIso] = useState("PK");
   const [phoneNumber, setPhoneNumber] = useState("");
 
+  // Saved address book (signed-in customers only).
+  const user = useAuth((s) => s.user);
+  const [addresses, setAddresses] = useState<ApiAddress[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // null = follow the smart default; a boolean means the customer chose.
+  const [saveManual, setSaveManual] = useState<boolean | null>(null);
+
+  // Live mirrors so async autofill never clobbers what's already been typed.
+  const formRef = useRef(form);
+  const phoneRef = useRef(phoneNumber);
+  useEffect(() => {
+    formRef.current = form;
+    phoneRef.current = phoneNumber;
+  });
+
   const states = useMemo(() => stateOptions(countryIso), [countryIso]);
   const cities = useMemo(
     () => cityOptions(countryIso, stateIso),
     [countryIso, stateIso],
   );
+
+  /**
+   * Copy a saved address into the form. With `onlyEmpty` (the on-load autofill)
+   * every field the customer already filled in is left untouched.
+   */
+  const fillFrom = useCallback((a: ApiAddress, onlyEmpty = false) => {
+    const cur = formRef.current;
+    const take = (curVal: string, next: string) =>
+      onlyEmpty && curVal.trim() ? curVal : next;
+
+    const country = take(cur.country, a.country);
+    const iso = isoForCountry(country);
+    // If they've already picked a different country, the saved state/city
+    // belong to another dataset and would desync the cascading pickers.
+    const localityApplies = country === a.country;
+    const state = localityApplies ? take(cur.state, a.state ?? "") : cur.state;
+
+    setForm((f) => ({
+      ...f,
+      address: take(cur.address, a.line1),
+      city: localityApplies ? take(cur.city, a.city) : f.city,
+      state,
+      postal: localityApplies ? take(cur.postal, a.postalCode ?? "") : f.postal,
+      country,
+    }));
+    setCountryIso(iso);
+    setStateIso(isoForState(iso, state));
+    setErrors({});
+
+    const phone = a.phone?.trim();
+    if (phone && !(onlyEmpty && phoneRef.current.trim())) {
+      const parsed = splitPhone(phone);
+      setDialIso(parsed.iso || iso || "PK");
+      setPhoneNumber(parsed.number);
+    } else if (iso && !onlyEmpty) {
+      setDialIso(iso);
+    }
+  }, []);
+
+  // Once the session is known, prefill identity and the default saved address.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const apply = (list: ApiAddress[]) => {
+      if (cancelled) return;
+
+      // Identity comes from the session — the address book has no name field.
+      setForm((f) => {
+        const next = { ...f };
+        if (!f.email.trim()) next.email = user.email;
+        if (!f.firstName.trim() && !f.lastName.trim()) {
+          const [first, ...rest] = user.name.trim().split(/\s+/);
+          next.firstName = first ?? "";
+          next.lastName = rest.join(" ");
+        }
+        return next;
+      });
+
+      if (list.length === 0) return;
+      setAddresses(list);
+      const preferred = list.find((a) => a.isDefault) ?? list[0];
+      setSelectedId(preferred.id);
+      fillFrom(preferred, true);
+    };
+
+    // An unreachable address book is a lost convenience, never a blocker.
+    api.getAddresses().then(apply, () => apply([]));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, fillFrom]);
+
+  const dial = useMemo(
+    () => dialOptions.find((d) => d.isoCode === dialIso)?.dialCode ?? "",
+    [dialIso],
+  );
+
+  const composedPhone = phoneNumber.trim()
+    ? `${dial} ${phoneNumber.trim()}`.trim()
+    : "";
+
+  /** The address currently described by the form, in API shape. */
+  const draft: AddressInput = useMemo(
+    () => ({
+      line1: form.address.trim(),
+      city: form.city.trim(),
+      state: form.state.trim() || null,
+      country: form.country.trim(),
+      postalCode: form.postal.trim() || null,
+      phone: composedPhone || null,
+      isDefault: addresses.length === 0,
+    }),
+    [form, composedPhone, addresses.length],
+  );
+
+  // Checked by default when this address isn't in the book yet (which includes
+  // the "no saved addresses at all" case), unless the customer says otherwise.
+  const matchesSaved = useMemo(
+    () => addresses.some((a) => sameAddress(a, draft)),
+    [addresses, draft],
+  );
+  const saveAddress = saveManual ?? !matchesSaved;
 
   // Load store settings to know which payment methods are enabled.
   useEffect(() => {
@@ -149,11 +315,7 @@ export default function CheckoutPage() {
     if (Object.keys(nextErrors).length > 0) return;
     if (cart.length === 0) return;
 
-    const dial =
-      dialOptions.find((d) => d.isoCode === dialIso)?.dialCode ?? "";
-    const phone = phoneNumber.trim()
-      ? `${dial} ${phoneNumber.trim()}`.trim()
-      : "N/A";
+    const phone = composedPhone || "N/A";
 
     setLoading(true);
     try {
@@ -173,6 +335,18 @@ export default function CheckoutPage() {
         },
         items: cart.map((l) => ({ productId: l.apiId, qty: l.qty })),
       });
+
+      // The order is placed — saving the address is a bonus. Swallow any
+      // failure so it can never surface as a checkout error, but await it so
+      // the request isn't cancelled by the redirect below.
+      if (user && saveAddress && draft.line1) {
+        try {
+          await api.createAddress(draft);
+        } catch {
+          /* ignore — the order went through, which is what matters */
+        }
+      }
+
       clearCart();
       if (res.paymentUrl) {
         window.location.href = res.paymentUrl;
@@ -211,6 +385,60 @@ export default function CheckoutPage() {
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
             <Section title="Shipping Address">
+              {addresses.length > 1 && (
+                <div className="mb-5">
+                  <p className="mb-2 text-sm font-medium text-coffee">
+                    Deliver to a saved address
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {addresses.map((a) => {
+                      const active = a.id === selectedId;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(a.id);
+                            setSaveManual(null);
+                            fillFrom(a);
+                          }}
+                          className={cn(
+                            "flex items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-xs transition",
+                            active
+                              ? "border-brand bg-brand/5"
+                              : "border-line bg-cream-soft hover:border-brand/50",
+                          )}
+                        >
+                          <MapPin
+                            className={cn(
+                              "mt-0.5 h-4 w-4 shrink-0",
+                              active ? "text-brand" : "text-muted",
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate font-semibold text-coffee">
+                                {a.label || "Address"}
+                              </span>
+                              {a.isDefault && (
+                                <span className="rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                                  Default
+                                </span>
+                              )}
+                            </span>
+                            <span className="mt-0.5 block truncate text-muted">
+                              {summarize(a)}
+                            </span>
+                          </span>
+                          {active && (
+                            <Check className="h-4 w-4 shrink-0 text-brand" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input label="First name" value={form.firstName} onChange={(v) => set("firstName", v)} error={errors.firstName} />
                 <Input label="Last name" value={form.lastName} onChange={(v) => set("lastName", v)} error={errors.lastName} />
@@ -270,6 +498,17 @@ export default function CheckoutPage() {
                   className="sm:col-span-2"
                 />
               </div>
+              {user && (
+                <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-coffee">
+                  <input
+                    type="checkbox"
+                    checked={saveAddress}
+                    onChange={(e) => setSaveManual(e.target.checked)}
+                    className="accent-[#8a5d3e]"
+                  />
+                  Save this address for next time
+                </label>
+              )}
             </Section>
 
             <Section title="Payment Method">

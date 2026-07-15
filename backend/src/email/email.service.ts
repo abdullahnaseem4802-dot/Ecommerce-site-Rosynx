@@ -8,6 +8,20 @@ export interface EmailMessage {
 }
 
 /**
+ * Every user-supplied value must go through this before being interpolated
+ * into an email body — otherwise a contact form is an HTML injection into
+ * whoever reads the mail.
+ */
+function escapeHtml(value: string | null | undefined): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Swappable email transport. Default = console (dev/no cost). To go live, set
  * EMAIL_PROVIDER=resend + RESEND_API_KEY and implement sendViaResend (or SES).
  * Callers never change.
@@ -62,10 +76,46 @@ export class EmailService {
       subject: `ROSYNX — New contact message${msg.subject ? `: ${msg.subject}` : ''}`,
       html: `
         <h2>New contact message</h2>
-        <p><strong>From:</strong> ${msg.name} (${msg.email})</p>
-        ${msg.subject ? `<p><strong>Subject:</strong> ${msg.subject}</p>` : ''}
-        <p>${msg.message}</p>`,
+        <p><strong>From:</strong> ${escapeHtml(msg.name)} (${escapeHtml(msg.email)})</p>
+        ${msg.subject ? `<p><strong>Subject:</strong> ${escapeHtml(msg.subject)}</p>` : ''}
+        <p>${escapeHtml(msg.message)}</p>`,
     });
+  }
+
+  /**
+   * Emails the ORIGINAL SENDER an admin's reply to their enquiry. Failures are
+   * swallowed: the reply is already persisted and readable in the customer's
+   * account, so a mail outage must not fail the admin's request.
+   */
+  async supportReply(
+    msg: {
+      name: string;
+      email: string;
+      subject?: string | null;
+      message: string;
+    },
+    replyBody: string,
+  ) {
+    try {
+      await this.send({
+        to: msg.email,
+        subject: `Re: ${msg.subject || 'your enquiry'} — ROSYNX Support`,
+        html: `
+        <h2>ROSYNX Support</h2>
+        <p>Hi ${escapeHtml(msg.name)},</p>
+        <p>${escapeHtml(replyBody)}</p>
+        <hr />
+        <p style="color:#888"><strong>Your original message:</strong></p>
+        ${msg.subject ? `<p style="color:#888"><strong>Subject:</strong> ${escapeHtml(msg.subject)}</p>` : ''}
+        <p style="color:#888">${escapeHtml(msg.message)}</p>
+        <p>You can also reply from your account.</p>`,
+      });
+    } catch (e) {
+      this.logger.error(
+        `supportReply email to ${msg.email} failed (reply is saved)`,
+        e as Error,
+      );
+    }
   }
 
   private async sendViaResend(msg: EmailMessage): Promise<void> {

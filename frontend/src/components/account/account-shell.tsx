@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Heart,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   MapPin,
   Package,
@@ -22,6 +23,7 @@ const nav = [
   { href: "/account/orders", label: "Orders", icon: Package },
   { href: "/wishlist", label: "Wishlist", icon: Heart },
   { href: "/account/addresses", label: "Addresses", icon: MapPin },
+  { href: "/account/support", label: "Support", icon: LifeBuoy },
   { href: "/account/profile", label: "Profile", icon: User },
 ];
 

@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Users, Search, Mail, Phone } from "lucide-react";
+import { Users, Search, Mail, Phone, Eye, Ban } from "lucide-react";
 import { api, Customer } from "@/lib/api";
 import { Card } from "@/components/ui";
 import { useCached } from "@/lib/use-cached";
@@ -11,6 +13,7 @@ const money = (n: number) =>
   "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CustomersPage() {
+  const router = useRouter();
   const { data: customers } = useCached("admin/customers", () =>
     api.get<Customer[]>("/admin/customers").catch(() => []),
   );
@@ -86,17 +89,36 @@ export default function CustomersPage() {
                   <th className="px-5 py-3 text-center font-medium">Orders</th>
                   <th className="px-5 py-3 text-right font-medium">Total Spent</th>
                   <th className="px-5 py-3 text-right font-medium">Joined</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {filtered.map((c) => (
-                  <tr key={c.id} className="hover:bg-panel-2/50">
+                  <tr
+                    key={c.id}
+                    onClick={() => router.push(`/customers/${c.id}`)}
+                    className="cursor-pointer hover:bg-panel-2/50"
+                  >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-copper/12 text-xs font-semibold text-copper-dark">
+                        <span
+                          className={
+                            "flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold " +
+                            (c.isActive
+                              ? "bg-copper/12 text-copper-dark"
+                              : "bg-bad/12 text-bad")
+                          }
+                        >
                           {c.name.slice(0, 2).toUpperCase()}
                         </span>
-                        <span className="font-medium text-fg">{c.name}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="font-medium text-fg">{c.name}</span>
+                          {!c.isActive && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-bad/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-bad">
+                              <Ban size={11} /> Blocked
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </td>
                     <td className="px-5 py-3 text-muted">
@@ -113,6 +135,18 @@ export default function CustomersPage() {
                     <td className="px-5 py-3 text-right font-semibold text-fg">{money(c.totalSpent)}</td>
                     <td className="px-5 py-3 text-right text-muted">
                       {new Date(c.joinedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Link
+                          href={`/customers/${c.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
+                          title="View customer"
+                        >
+                          <Eye size={15} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

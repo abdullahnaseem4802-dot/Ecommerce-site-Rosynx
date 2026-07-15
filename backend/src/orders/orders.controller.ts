@@ -14,6 +14,7 @@ import { OrderStatus, Role } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { PaymobService } from '../payments/paymob.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -87,7 +88,7 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body('status') status: OrderStatus) {
-    return this.orders.updateStatus(id, status);
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
+    return this.orders.updateStatus(id, dto.status, dto.note);
   }
 }

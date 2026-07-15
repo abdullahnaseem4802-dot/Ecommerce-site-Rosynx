@@ -3,6 +3,24 @@
 import { create } from "zustand";
 import { api, clearToken, getToken, setToken } from "@/lib/api";
 import { useShop } from "@/lib/store";
+import { takePendingAdd } from "@/lib/cart-intent";
+
+/**
+ * After signing in, add whatever the visitor was trying to add when the login
+ * gate stopped them. Runs after the guest-cart merge so the merged cart isn't
+ * overwritten by a stale response.
+ */
+async function afterAuth() {
+  await useShop.getState().mergeGuestCart();
+  const pending = takePendingAdd();
+  if (!pending) return;
+  try {
+    await api.addToCart(pending.apiId, pending.qty);
+    await useShop.getState().hydrate();
+  } catch {
+    /* the visitor is signed in either way — they can add it again */
+  }
+}
 
 export type User = {
   id: string;
@@ -28,14 +46,14 @@ export const useAuth = create<AuthState>()((set) => ({
     const res = await api.login(email, password);
     setToken(res.accessToken);
     set({ user: res.user });
-    await useShop.getState().mergeGuestCart();
+    await afterAuth();
   },
 
   register: async (name, email, password) => {
     const res = await api.register(name, email, password);
     setToken(res.accessToken);
     set({ user: res.user });
-    await useShop.getState().mergeGuestCart();
+    await afterAuth();
   },
 
   logout: () => {

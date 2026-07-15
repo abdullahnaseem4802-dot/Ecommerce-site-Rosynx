@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minus, Plus, Star, X } from "lucide-react";
 import type { Product } from "@/lib/data";
 import { useShop } from "@/lib/store";
+import { useAddToCart } from "@/lib/use-add-to-cart";
 import { Button } from "@/components/ui/button";
 import { useMoney } from "@/lib/currency";
 import { ProductBadges } from "./product-badge";
@@ -21,7 +22,7 @@ export function QuickView({
   open: boolean;
   onClose: () => void;
 }) {
-  const addToCart = useShop((s) => s.addToCart);
+  const addToCart = useAddToCart();
   const { format } = useMoney();
   const [qty, setQty] = useState(1);
   const [active, setActive] = useState(0);
@@ -157,8 +158,7 @@ export function QuickView({
                 <Button
                   className="flex-1"
                   onClick={() => {
-                    addToCart(product, qty);
-                    setAdded(true);
+                    if (addToCart(product, qty)) setAdded(true);
                   }}
                 >
                   {added ? (

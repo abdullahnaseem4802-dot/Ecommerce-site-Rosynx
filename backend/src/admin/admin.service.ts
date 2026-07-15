@@ -1,7 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { OrderStatus, Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { serializeProduct } from '../products/product.serializer';
+import {
+  ResetCustomerPasswordDto,
+  UpdateCustomerDto,
+  UpdateCustomerStatusDto,
+} from './dto/customer.dto';
 
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
@@ -173,10 +183,107 @@ export class AdminService {
         name: u.name,
         email: u.email,
         phone: u.phone,
+        isActive: u.isActive,
         orders: u._count.orders,
         totalSpent: spent,
         joinedAt: u.createdAt,
       };
     });
+  }
+
+  async customer(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            orderNumber: true,
+            status: true,
+            totalCents: true,
+            createdAt: true,
+          },
+        },
+        addresses: true,
+      },
+    });
+    if (!user || user.role !== Role.CUSTOMER)
+      throw new NotFoundException('Customer not found');
+
+    const totalSpent =
+      user.orders
+        .filter((o) => PAID_STATUSES.includes(o.status))
+        .reduce((s, o) => s + o.totalCents, 0) / 100;
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      isActive: user.isActive,
+      joinedAt: user.createdAt,
+      ordersCount: user.orders.length,
+      totalSpent,
+      orders: user.orders.map((o) => ({
+        orderNumber: o.orderNumber,
+        status: o.status,
+        total: o.totalCents / 100,
+        createdAt: o.createdAt,
+      })),
+      addresses: user.addresses.map((a) => ({
+        id: a.id,
+        label: a.label,
+        line1: a.line1,
+        line2: a.line2,
+        city: a.city,
+        state: a.state,
+        country: a.country,
+        postalCode: a.postalCode,
+        phone: a.phone,
+        isDefault: a.isDefault,
+      })),
+    };
+  }
+
+  async updateCustomer(id: string, dto: UpdateCustomerDto) {
+    await this.assertCustomer(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { name: dto.name, phone: dto.phone },
+    });
+    return this.customer(id);
+  }
+
+  /** Sets a new password directly. The plaintext and the hash never leave here. */
+  async resetCustomerPassword(id: string, dto: ResetCustomerPasswordDto) {
+    await this.assertCustomer(id);
+    // cost 12 to match auth.service.ts
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    return { ok: true };
+  }
+
+  async setCustomerStatus(id: string, dto: UpdateCustomerStatusDto) {
+    await this.assertCustomer(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: dto.isActive },
+    });
+    return this.customer(id);
+  }
+
+  /**
+   * These endpoints manage customers only. An admin must never be able to reset
+   * another admin's password or block them through the customer routes.
+   */
+  private async assertCustomer(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    });
+    if (!user) throw new NotFoundException('Customer not found');
+    if (user.role !== Role.CUSTOMER)
+      throw new ForbiddenException('This user is not a customer');
+    return user;
   }
 }

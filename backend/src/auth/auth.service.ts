@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -11,6 +12,9 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+
+export const SUSPENDED_MESSAGE =
+  'This account has been suspended. Please contact support.';
 
 @Injectable()
 export class AuthService {
@@ -45,6 +49,9 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Invalid credentials');
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
+    // Checked only after the password verifies, so it can't be used to probe
+    // which emails exist.
+    if (!user.isActive) throw new ForbiddenException(SUSPENDED_MESSAGE);
     return this.buildAuthResponse(user);
   }
 
@@ -74,6 +81,7 @@ export class AuthService {
       throw err;
     }
     if (!user) throw new UnauthorizedException('Invalid refresh token');
+    if (!user.isActive) throw new ForbiddenException(SUSPENDED_MESSAGE);
     return this.buildAuthResponse(user);
   }
 
@@ -115,6 +123,7 @@ export class AuthService {
       email: user.email,
       phone: user.phone,
       role: user.role as Role,
+      isActive: user.isActive,
     };
   }
 }

@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import type { Product } from "@/lib/data";
 import { useHydrated, useShop } from "@/lib/store";
+import { useAddToCart } from "@/lib/use-add-to-cart";
 import { useAuth } from "@/lib/auth";
 import { api, type ApiReview } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export function ProductDetail({ product }: { product: Product }) {
   const { format } = useMoney();
   const wished = useShop((s) => s.wishlist.includes(product.id));
   const toggleWishlist = useShop((s) => s.toggleWishlist);
-  const addToCart = useShop((s) => s.addToCart);
+  const addToCart = useAddToCart();
 
   useEffect(() => {
     if (!added) return;
@@ -213,8 +214,9 @@ export function ProductDetail({ product }: { product: Product }) {
               disabled={!product.inStock}
               className="flex-1"
               onClick={() => {
-                addToCart(product, qty);
-                setAdded(true);
+                // Only flip to "Added" if it actually went in — a signed-out
+                // visitor gets redirected to sign in instead.
+                if (addToCart(product, qty)) setAdded(true);
               }}
             >
               {added ? (

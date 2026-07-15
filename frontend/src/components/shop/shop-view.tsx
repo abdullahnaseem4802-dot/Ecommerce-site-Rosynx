@@ -16,6 +16,7 @@ import { sortOptions } from "@/lib/data";
 import type { Product } from "@/lib/data";
 import type { ApiCategory } from "@/lib/catalog";
 import { useShop } from "@/lib/store";
+import { useAddToCart } from "@/lib/use-add-to-cart";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/product/product-card";
@@ -350,7 +351,7 @@ function EmptyState({ onReset }: { onReset: () => void }) {
 }
 
 function ProductRow({ product }: { product: Product }) {
-  const addToCart = useShop((s) => s.addToCart);
+  const addToCart = useAddToCart();
   const { format } = useMoney();
   return (
     <div className="flex gap-4 overflow-hidden rounded-2xl border border-line/60 bg-white p-3 transition hover:shadow-lg hover:shadow-espresso/5 sm:gap-6 sm:p-4">
