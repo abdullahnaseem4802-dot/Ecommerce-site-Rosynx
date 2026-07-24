@@ -3,19 +3,19 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, Heart, ShoppingBag, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Heart, ShoppingBag, Star } from "lucide-react";
 import type { Product } from "@/lib/data";
 import { useHydrated, useShop } from "@/lib/store";
 import { useAddToCart } from "@/lib/use-add-to-cart";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ProductBadges } from "./product-badge";
-import { QuickView } from "./quick-view";
 
 export function ProductCard({ product }: { product: Product }) {
   const [hover, setHover] = useState(false);
-  const [quick, setQuick] = useState(false);
   const hydrated = useHydrated();
+  const router = useRouter();
   const { format } = useMoney();
 
   const wished = useShop((s) => s.wishlist.includes(product.id));
@@ -29,13 +29,18 @@ export function ProductCard({ product }: { product: Product }) {
   const secondImage = product.images[1] ?? product.images[0];
 
   return (
-    <>
-      <div
-        className="group flex flex-col overflow-hidden rounded-2xl border border-line/60 bg-white transition-all duration-300 hover:-translate-y-1.5 hover:border-line hover:shadow-xl hover:shadow-espresso/10"
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-      >
-        <div className="relative aspect-[4/3] overflow-hidden bg-cream-card">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(`/product/${product.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") router.push(`/product/${product.id}`);
+      }}
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-line/60 bg-white transition-all duration-300 hover:-translate-y-1.5 hover:border-line hover:shadow-xl hover:shadow-espresso/10"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-cream-card">
           <Image
             src={product.images[0]}
             alt={product.name}
@@ -72,30 +77,29 @@ export function ProductCard({ product }: { product: Product }) {
             </div>
           )}
 
-          {/* Side actions */}
+          {/* Side actions — always visible so they work on touch (no hover) */}
           <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
             <ActionBtn
               label="Wishlist"
               active={hydrated && wished}
-              onClick={() => toggleWishlist(product.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleWishlist(product.id);
+              }}
             >
               <Heart className={cn("h-4 w-4", hydrated && wished && "fill-sale text-sale")} />
             </ActionBtn>
-            <ActionBtn
-              label="Quick view"
-              onClick={() => setQuick(true)}
-              delay="delay-75"
-            >
-              <Eye className="h-4 w-4" />
-            </ActionBtn>
           </div>
 
-          {/* Add to cart */}
+          {/* Add to cart — always visible so it works on touch (no hover) */}
           {product.inStock && (
             <button
               type="button"
-              onClick={() => addToCart(product)}
-              className="absolute inset-x-3 bottom-3 z-10 flex translate-y-3 items-center justify-center gap-2 rounded-full bg-brand py-2.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 hover:bg-brand-dark"
+              onClick={(e) => {
+                e.stopPropagation();
+                addToCart(product);
+              }}
+              className="absolute inset-x-3 bottom-3 z-10 flex items-center justify-center gap-2 rounded-full bg-brand py-2.5 text-xs font-semibold text-white shadow-lg transition-colors duration-300 hover:bg-brand-dark"
             >
               <ShoppingBag className="h-4 w-4" />
               Add to Cart
@@ -117,6 +121,7 @@ export function ProductCard({ product }: { product: Product }) {
 
           <Link
             href={`/product/${product.id}`}
+            onClick={(e) => e.stopPropagation()}
             className="mt-1.5 line-clamp-2 text-sm font-semibold text-ink transition hover:text-brand"
           >
             {product.name}
@@ -145,9 +150,6 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
         </div>
       </div>
-
-      <QuickView product={product} open={quick} onClose={() => setQuick(false)} />
-    </>
   );
 }
 
@@ -156,13 +158,11 @@ function ActionBtn({
   label,
   active,
   onClick,
-  delay = "",
 }: {
   children: React.ReactNode;
   label: string;
   active?: boolean;
-  onClick: () => void;
-  delay?: string;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
@@ -171,8 +171,7 @@ function ActionBtn({
       title={label}
       onClick={onClick}
       className={cn(
-        "flex h-8 w-8 translate-x-3 items-center justify-center rounded-full bg-white/95 text-coffee opacity-0 shadow-sm backdrop-blur transition-all duration-300 hover:bg-brand hover:text-white group-hover:translate-x-0 group-hover:opacity-100",
-        delay,
+        "flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-coffee shadow-sm backdrop-blur transition-colors duration-300 hover:bg-brand hover:text-white",
         active && "text-brand",
       )}
     >

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useHydrated } from "@/lib/store";
+import { useSupportUnread } from "@/lib/use-support-unread";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
 import { ButtonLink } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export function AccountShell({
   const user = useAuth((s) => s.user);
   const ready = useAuth((s) => s.ready);
   const logout = useAuth((s) => s.logout);
+  const supportUnread = useSupportUnread();
 
   if (!hydrated || !ready) return <div className="min-h-[60vh]" />;
 
@@ -84,6 +86,10 @@ export function AccountShell({
             </div>
             {nav.map((item) => {
               const active = pathname === item.href;
+              const badge =
+                item.href === "/account/support" && supportUnread > 0
+                  ? supportUnread
+                  : 0;
               return (
                 <Link
                   key={item.href}
@@ -97,6 +103,16 @@ export function AccountShell({
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
+                  {badge > 0 && (
+                    <span
+                      className={cn(
+                        "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold",
+                        active ? "bg-white text-brand" : "bg-brand text-white",
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

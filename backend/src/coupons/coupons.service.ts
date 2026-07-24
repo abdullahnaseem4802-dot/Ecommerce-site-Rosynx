@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Coupon, CouponType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { CreateCouponDto } from './dto/coupon.dto';
 
 export interface CouponResult {
@@ -18,7 +19,10 @@ export interface CouponResult {
 
 @Injectable()
 export class CouponsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+  ) {}
 
   /** Pure calculation used by both /validate and checkout. Throws on invalid. */
   async apply(code: string, subtotalCents: number): Promise<CouponResult> {
@@ -104,6 +108,38 @@ export class CouponsService {
     await this.ensure(id);
     await this.prisma.coupon.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  /**
+   * Email this coupon to every active subscriber. This is how coupons reach
+   * customers — they are never shown publicly on the storefront. Each send is
+   * best-effort so one bad address doesn't abort the batch; returns a tally.
+   */
+  async broadcast(id: string) {
+    const coupon = await this.prisma.coupon.findUnique({ where: { id } });
+    if (!coupon) throw new NotFoundException('Coupon not found');
+    if (!coupon.isActive)
+      throw new BadRequestException('Activate the coupon before sending it');
+
+    const [subscribers, settings] = await Promise.all([
+      this.prisma.subscriber.findMany({ where: { isActive: true } }),
+      this.prisma.storeSetting.findUnique({ where: { id: 'singleton' } }),
+    ]);
+    const currency = settings?.baseCurrency ?? 'USD';
+
+    let sent = 0;
+    for (const sub of subscribers) {
+      const ok = await this.email.couponOffer(sub.email, {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+        minSubtotalCents: coupon.minSubtotalCents,
+        expiresAt: coupon.expiresAt,
+        currency,
+      });
+      if (ok) sent++;
+    }
+    return { sent, total: subscribers.length };
   }
 
   private async ensure(id: string) {

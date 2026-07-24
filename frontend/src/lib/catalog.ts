@@ -64,6 +64,9 @@ export function mapProduct(p: ApiProduct): Product {
     slug: p.slug,
     name: p.name,
     category: p.category ?? "uncategorized",
+    categorySlugs: p.categories?.length
+      ? p.categories.map((c) => c.slug)
+      : [p.category ?? "uncategorized"],
     categoryName: p.categoryName ?? "Uncategorized",
     material: (p.material ?? "").toLowerCase(),
     price: p.price,

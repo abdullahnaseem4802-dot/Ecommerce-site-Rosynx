@@ -4,11 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { serializeProduct } from '../products/product.serializer';
 import {
-  ResetCustomerPasswordDto,
   UpdateCustomerDto,
   UpdateCustomerStatusDto,
 } from './dto/customer.dto';
@@ -252,15 +250,6 @@ export class AdminService {
       data: { name: dto.name, phone: dto.phone },
     });
     return this.customer(id);
-  }
-
-  /** Sets a new password directly. The plaintext and the hash never leave here. */
-  async resetCustomerPassword(id: string, dto: ResetCustomerPasswordDto) {
-    await this.assertCustomer(id);
-    // cost 12 to match auth.service.ts
-    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
-    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
-    return { ok: true };
   }
 
   async setCustomerStatus(id: string, dto: UpdateCustomerStatusDto) {

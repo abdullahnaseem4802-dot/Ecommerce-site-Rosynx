@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Package } from "lucide-react";
+import { Eye, Package } from "lucide-react";
 import { api, type OrderSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountShell } from "@/components/account/account-shell";
@@ -66,69 +66,60 @@ export default function OrdersPage() {
           <p className="mt-3 text-sm text-muted">You have no orders yet.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {orders.map((o) => {
+        <div className="overflow-hidden rounded-2xl border border-line/60 bg-white">
+          {/* Column header (hidden on small screens) */}
+          <div className="hidden items-center gap-4 border-b border-line/60 bg-cream-soft px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted sm:flex">
+            <span className="flex-1">Order</span>
+            <span className="w-28">Date</span>
+            <span className="w-28">Status</span>
+            <span className="w-24 text-right">Total</span>
+            <span className="w-8" />
+          </div>
+
+          {orders.map((o, idx) => {
             const expanded = open === o.orderNumber;
             return (
               <div
                 key={o.orderNumber}
-                className="overflow-hidden rounded-2xl border border-line/60 bg-white"
+                className={cn(idx > 0 && "border-t border-line/60")}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/60 bg-cream-soft px-5 py-3">
-                  <div className="flex items-center gap-4">
-                    <span className="font-semibold text-coffee">
-                      {o.orderNumber}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {new Date(o.createdAt).toLocaleDateString()} ·{" "}
-                      {o.paymentMethod.replace(/_/g, " ").toLowerCase()}
-                    </span>
+                {/* Compact list row */}
+                <div className="flex flex-wrap items-center gap-3 px-5 py-4 text-sm sm:flex-nowrap sm:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-coffee">{o.orderNumber}</p>
+                    <p className="text-xs text-muted sm:hidden">
+                      {new Date(o.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <span className="hidden w-28 text-xs text-muted sm:block">
+                    {new Date(o.createdAt).toLocaleDateString()}
+                  </span>
+                  <span className="w-28">
                     <Pill status={o.status} />
-                    <span className="font-bold text-espresso">
-                      {format(o.total)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-line/60">
-                  {o.items.map((it, i) => (
-                    <div key={i} className="flex items-center gap-4 px-5 py-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-cream-card text-brand">
-                        <Package className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-coffee">
-                          {it.name}
-                        </p>
-                        <span className="text-xs text-muted">
-                          Qty {it.qty} · {format(it.price)}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-espresso">
-                        {format(it.lineTotal)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setOpen(expanded ? null : o.orderNumber)}
-                  aria-expanded={expanded}
-                  className="flex w-full items-center justify-center gap-2 border-t border-line/60 px-5 py-3 text-sm font-semibold text-brand transition hover:bg-cream-soft"
-                >
-                  {expanded ? "Hide tracking" : "Track order"}
-                  <motion.span
-                    animate={{ rotate: expanded ? 180 : 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="flex"
+                  </span>
+                  <span className="w-24 text-right font-bold text-espresso">
+                    {format(o.total)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(expanded ? null : o.orderNumber)}
+                    aria-expanded={expanded}
+                    aria-label={
+                      expanded ? "Hide order details" : "View order details"
+                    }
+                    title={expanded ? "Hide details" : "View details"}
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition",
+                      expanded
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-line text-muted hover:border-brand hover:text-brand",
+                    )}
                   >
-                    <ChevronDown className="h-4 w-4" />
-                  </motion.span>
-                </button>
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </div>
 
+                {/* Detail — revealed only when the eye is clicked */}
                 <AnimatePresence initial={false}>
                   {expanded && (
                     <motion.div
@@ -139,6 +130,29 @@ export default function OrdersPage() {
                       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                       className="overflow-hidden border-t border-line/60 bg-cream-soft"
                     >
+                      <div className="divide-y divide-line/60 border-b border-line/60">
+                        {o.items.map((it, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-4 px-5 py-3"
+                          >
+                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-cream-card text-brand">
+                              <Package className="h-5 w-5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-coffee">
+                                {it.name}
+                              </p>
+                              <span className="text-xs text-muted">
+                                Qty {it.qty} · {format(it.price)}
+                              </span>
+                            </div>
+                            <span className="text-sm font-medium text-espresso">
+                              {format(it.lineTotal)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                       <div className="grid gap-6 p-5 sm:grid-cols-2">
                         <OrderTracker
                           status={o.status}

@@ -118,6 +118,70 @@ export class EmailService {
     }
   }
 
+  /**
+   * Emails a subscriber a coupon code (admin "send to subscribers" action).
+   * Best-effort per recipient — a single bad address must not abort the batch.
+   */
+  async couponOffer(
+    to: string,
+    coupon: {
+      code: string;
+      type: 'PERCENT' | 'FIXED';
+      value: number;
+      minSubtotalCents?: number;
+      expiresAt?: Date | null;
+      currency?: string;
+    },
+  ): Promise<boolean> {
+    const cur = coupon.currency ?? 'USD';
+    const amount =
+      coupon.type === 'PERCENT'
+        ? `${coupon.value}% off`
+        : `${cur} ${(coupon.value / 100).toFixed(2)} off`;
+    const min =
+      coupon.minSubtotalCents && coupon.minSubtotalCents > 0
+        ? `<p style="color:#888">Minimum spend: ${cur} ${(coupon.minSubtotalCents / 100).toFixed(2)}</p>`
+        : '';
+    const expiry = coupon.expiresAt
+      ? `<p style="color:#888">Valid until ${new Date(coupon.expiresAt).toDateString()}</p>`
+      : '';
+    try {
+      await this.send({
+        to,
+        subject: `A gift from ROSYNX — ${amount}`,
+        html: `
+        <h2>Here's a little something for you 🎁</h2>
+        <p>Use this code at checkout to get <strong>${amount}</strong>:</p>
+        <p style="font-size:22px;font-weight:700;letter-spacing:2px;padding:12px 16px;background:#faf5ef;border:1px dashed #c96b1f;border-radius:8px;display:inline-block">${escapeHtml(coupon.code)}</p>
+        ${min}
+        ${expiry}
+        <p>Happy shopping,<br/>The ROSYNX team</p>`,
+      });
+      return true;
+    } catch (e) {
+      this.logger.error(`couponOffer email to ${to} failed`, e as Error);
+      return false;
+    }
+  }
+
+  /**
+   * Emails a password-reset OTP. Failures propagate so the caller can surface a
+   * "couldn't send, try again" — unlike the fire-and-forget support/coupon mail,
+   * the whole reset flow is useless if the code never arrives.
+   */
+  async passwordResetOtp(to: string, name: string, otp: string): Promise<void> {
+    await this.send({
+      to,
+      subject: 'ROSYNX — your password reset code',
+      html: `
+        <h2>Password reset</h2>
+        <p>Hi ${escapeHtml(name)},</p>
+        <p>Your one-time reset code is:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${escapeHtml(otp)}</p>
+        <p style="color:#888">This code expires in 15 minutes. If you didn't request it, you can ignore this email.</p>`,
+    });
+  }
+
   private async sendViaResend(msg: EmailMessage): Promise<void> {
     const key = this.config.get<string>('RESEND_API_KEY');
     const from =

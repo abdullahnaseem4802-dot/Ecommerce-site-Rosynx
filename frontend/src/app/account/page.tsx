@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Package, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { useHydrated, useShop } from "@/lib/store";
+import { useCartCount, useHydrated, useShop } from "@/lib/store";
 import { api, type OrderSummary } from "@/lib/api";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
@@ -28,7 +28,8 @@ function Dashboard() {
   const user = useAuth((s) => s.user)!;
   const { format } = useMoney();
   const wishlist = useShop((s) => s.wishlist.length);
-  const cart = useShop((s) => s.cart.length);
+  // Match the header cart badge: total quantity, not distinct line count.
+  const cart = useCartCount();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
 
   useEffect(() => {
@@ -132,6 +133,9 @@ export function StatusPill({ status }: { status: string }) {
 
 /* ------------------------------ Auth ------------------------------ */
 
+// Stricter than "contains @" but lenient enough for real addresses.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function AuthForm() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const login = useAuth((s) => s.login);
@@ -156,7 +160,7 @@ function AuthForm() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email.includes("@") || password.length < 8) {
+    if (!EMAIL_RE.test(email.trim()) || password.length < 8) {
       setError("Enter a valid email and a password of at least 8 characters.");
       return;
     }
@@ -211,6 +215,17 @@ function AuthForm() {
             )}
             <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="you@email.com" />
             <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+
+            {mode === "login" && (
+              <div className="text-right">
+                <Link
+                  href="/account/reset"
+                  className="text-xs font-medium text-brand hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             {error && <p className="text-sm text-sale">{error}</p>}
 

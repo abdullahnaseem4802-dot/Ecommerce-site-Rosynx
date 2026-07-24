@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronRight, LifeBuoy, Lock, Send } from "lucide-react";
 import { api, type Ticket } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { refreshSupportUnread } from "@/lib/use-support-unread";
 import { AccountShell } from "@/components/account/account-shell";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,9 @@ export default function SupportPage() {
         setTickets((list) =>
           list ? list.map((x) => (x.id === fresh.id ? fresh : x)) : list,
         );
+        // Opening the thread clears its unread flag server-side — refresh the
+        // header/sidebar badge so it drops immediately.
+        refreshSupportUnread();
       })
       .catch(() => {
         /* keep the copy we already have from the list */

@@ -1,12 +1,25 @@
-"use client";
-
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
-import { cn } from "@/lib/utils";
+import { FaqAccordion, type FaqEntry } from "@/components/faq/faq-accordion";
 
-const faqs = [
+// Admin-managed via /admin → FAQs. This page renders whatever the admin has
+// published; the list below is only a fallback shown when none exist yet (e.g.
+// a fresh database), so the page is never empty. On-demand revalidation
+// (backend RevalidateService.faq → /faqs) makes admin edits appear in seconds.
+export const revalidate = 300;
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+
+interface ApiFaq {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  sortOrder: number;
+  isPublished: boolean;
+}
+
+const FALLBACK: FaqEntry[] = [
   {
     q: "What does “handmade” really mean at ROSYNX?",
     a: "Every ROSYNX piece is individually made by skilled artisans, not stamped out by a machine. Because a real person shapes, carves and finishes each item by hand, no two are ever perfectly identical. Small differences in grain, tone, veining or finish are not flaws — they are the signature of authentic, one-of-a-kind craftsmanship.",
@@ -32,24 +45,8 @@ const faqs = [
     a: "If your piece isn’t quite right, you may request a return or exchange within 14 days of delivery, provided the item is unused and in its original condition and packaging. Please note that custom, personalised or commissioned pieces are made specifically for you and are non-returnable unless they arrive damaged or faulty.",
   },
   {
-    q: "Can I request a custom or commissioned piece?",
-    a: "Absolutely — bespoke work is one of our favourite things to do. Share your idea, dimensions, materials or occasion through our Contact page and we’ll connect you with the right artisan, discuss options and provide a quote and timeline before any work begins.",
-  },
-  {
     q: "What payment methods do you accept?",
     a: "We currently offer Cash on Delivery where available, as well as secure card payments at checkout. Card payments are processed in a protected sandbox environment for now while we finalise our live payment integration, so you can order with confidence.",
-  },
-  {
-    q: "Why do prices show in different currencies?",
-    a: "To make shopping easier wherever you are, prices can be displayed in several currencies using up-to-date exchange rates. You can switch your preferred currency at any time using the currency selector. Your order is charged in our store’s base currency, and converted amounts are shown as a helpful estimate.",
-  },
-  {
-    q: "How do I care for my handmade item?",
-    a: "Care depends on the material. As a general guide, wipe wood, stone and metal gently with a soft, dry cloth, avoid harsh chemicals and prolonged direct sunlight, and condition leather occasionally to keep it supple. Any specific care instructions for your piece are listed on its product page.",
-  },
-  {
-    q: "What if my order arrives damaged?",
-    a: "We pack every order with great care, but if something arrives damaged in transit, please contact us within 48 hours of delivery with a few photos of the item and packaging. We’ll arrange a replacement, repair or refund as quickly as possible — your satisfaction matters to us.",
   },
   {
     q: "How do I contact your support team?",
@@ -57,8 +54,20 @@ const faqs = [
   },
 ];
 
-export default function FaqsPage() {
-  const [open, setOpen] = useState<number | null>(0);
+async function fetchFaqs(): Promise<FaqEntry[]> {
+  try {
+    const res = await fetch(`${API}/faqs`, { next: { revalidate: 300 } });
+    if (!res.ok) return FALLBACK;
+    const data = (await res.json()) as ApiFaq[];
+    if (!Array.isArray(data) || data.length === 0) return FALLBACK;
+    return data.map((f) => ({ q: f.question, a: f.answer }));
+  } catch {
+    return FALLBACK;
+  }
+}
+
+export default async function FaqsPage() {
+  const faqs = await fetchFaqs();
   return (
     <div className="pb-20">
       <PageBanner
@@ -67,36 +76,7 @@ export default function FaqsPage() {
         crumb="FAQ's"
       />
       <Container>
-        <div className="mx-auto max-w-3xl space-y-3">
-          {faqs.map((f, i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-line/60 bg-white">
-              <button
-                onClick={() => setOpen(open === i ? null : i)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-              >
-                <span className="font-medium text-espresso">{f.q}</span>
-                <ChevronDown
-                  className={cn(
-                    "h-5 w-5 shrink-0 text-brand transition-transform",
-                    open === i && "rotate-180",
-                  )}
-                />
-              </button>
-              <div
-                className={cn(
-                  "grid transition-all duration-300",
-                  open === i ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="overflow-hidden">
-                  <p className="px-5 pb-4 text-sm leading-relaxed text-coffee/75">
-                    {f.a}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <FaqAccordion items={faqs} />
       </Container>
     </div>
   );

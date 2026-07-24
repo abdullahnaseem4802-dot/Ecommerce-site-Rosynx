@@ -25,6 +25,7 @@ import { ContactModule } from './contact/contact.module';
 import { SubscribersModule } from './subscribers/subscribers.module';
 import { SettingsModule } from './settings/settings.module';
 import { BlogModule } from './blog/blog.module';
+import { FaqModule } from './faq/faq.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
@@ -52,6 +53,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     SubscribersModule,
     SettingsModule,
     BlogModule,
+    FaqModule,
   ],
   controllers: [AppController],
   providers: [

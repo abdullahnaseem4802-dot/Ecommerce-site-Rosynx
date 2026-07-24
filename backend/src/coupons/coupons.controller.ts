@@ -51,6 +51,13 @@ export class CouponsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
+  @Post(':id/broadcast')
+  broadcast(@Param('id') id: string) {
+    return this.coupons.broadcast(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.coupons.remove(id);

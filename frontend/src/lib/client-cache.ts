@@ -98,5 +98,8 @@ export const TTL = {
   settings: 5 * 60_000,
   rates: 30 * 60_000,
   catalog: 10 * 60_000,
-  categories: 10 * 60_000,
+  // Short TTL so the header reflects admin category add/delete within ~1 min
+  // (the shop sidebar is server-rendered and already fresh). Still cached
+  // within a page session, so we don't refetch on every render/navigation.
+  categories: 60_000,
 };

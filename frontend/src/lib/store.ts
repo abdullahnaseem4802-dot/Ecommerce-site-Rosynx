@@ -27,8 +27,8 @@ type ShopState = {
   coupon: AppliedCoupon | null;
   setCoupon: (c: AppliedCoupon | null) => void;
   addToCart: (p: Product, qty?: number) => void;
-  removeFromCart: (id: number) => void;
-  setQty: (id: number, qty: number) => void;
+  removeFromCart: (apiId: string) => void;
+  setQty: (apiId: string, qty: number) => void;
   toggleWishlist: (id: number) => void;
   toggleCompare: (id: number) => void;
   clearCompare: () => void;
@@ -37,7 +37,12 @@ type ShopState = {
   mergeGuestCart: () => Promise<void>;
 };
 
-/** Map a server cart response to local CartLine[] (numeric ids via live cache). */
+/**
+ * Map a server cart response to local CartLine[]. The numeric `id` is only used
+ * for product links and may be 0 when the catalog cache is cold; the stable
+ * identity of a line is its `apiId` (the backend product cuid), which always
+ * comes straight from the server response and never collapses.
+ */
 function toLines(cart: ApiCart): CartLine[] {
   const catalog = cachedProducts();
   return cart.items.map((i) => {
@@ -54,16 +59,6 @@ function toLines(cart: ApiCart): CartLine[] {
   });
 }
 
-// Resolve the backend product id for a local line: prefer the line itself
-// (it always carries apiId), then fall back to the live catalog cache.
-function apiIdOfIn(cart: CartLine[], id: number) {
-  return (
-    cart.find((l) => l.id === id)?.apiId ??
-    cachedProducts().find((p) => p.id === id)?.apiId ??
-    ""
-  );
-}
-
 export const useShop = create<ShopState>()(
   persist(
     (set, get) => ({
@@ -75,13 +70,14 @@ export const useShop = create<ShopState>()(
       setCoupon: (c) => set({ coupon: c }),
 
       addToCart: (p, qty = 1) => {
-        // optimistic
+        // optimistic — dedupe by the stable apiId (numeric id can collide at 0
+        // when the catalog cache is cold).
         set((s) => {
-          const existing = s.cart.find((l) => l.id === p.id);
+          const existing = s.cart.find((l) => l.apiId === p.apiId);
           if (existing) {
             return {
               cart: s.cart.map((l) =>
-                l.id === p.id ? { ...l, qty: l.qty + qty } : l,
+                l.apiId === p.apiId ? { ...l, qty: l.qty + qty } : l,
               ),
             };
           }
@@ -107,13 +103,13 @@ export const useShop = create<ShopState>()(
             // Roll the optimistic add back. Without this the item looks added
             // and then silently disappears on the next hydrate().
             set((s) => {
-              const existing = s.cart.find((l) => l.id === p.id);
+              const existing = s.cart.find((l) => l.apiId === p.apiId);
               if (!existing) return s;
               return existing.qty <= qty
-                ? { cart: s.cart.filter((l) => l.id !== p.id) }
+                ? { cart: s.cart.filter((l) => l.apiId !== p.apiId) }
                 : {
                     cart: s.cart.map((l) =>
-                      l.id === p.id ? { ...l, qty: l.qty - qty } : l,
+                      l.apiId === p.apiId ? { ...l, qty: l.qty - qty } : l,
                     ),
                   };
             });
@@ -123,20 +119,22 @@ export const useShop = create<ShopState>()(
           });
       },
 
-      removeFromCart: (id) => {
-        const apiId = apiIdOfIn(get().cart, id);
-        set((s) => ({ cart: s.cart.filter((l) => l.id !== id) }));
+      removeFromCart: (apiId) => {
+        // Key by the stable apiId so removing one line never takes out other
+        // lines that happen to share a numeric id of 0 (cold catalog cache).
+        if (!apiId) return;
+        set((s) => ({ cart: s.cart.filter((l) => l.apiId !== apiId) }));
         api
           .removeCartItem(apiId)
           .then((c) => set({ cart: toLines(c) }))
           .catch(() => {});
       },
 
-      setQty: (id, qty) => {
-        const apiId = apiIdOfIn(get().cart, id);
+      setQty: (apiId, qty) => {
+        if (!apiId) return;
         set((s) => ({
           cart: s.cart
-            .map((l) => (l.id === id ? { ...l, qty: Math.max(1, qty) } : l))
+            .map((l) => (l.apiId === apiId ? { ...l, qty: Math.max(1, qty) } : l))
             .filter((l) => l.qty > 0),
         }));
         const call =

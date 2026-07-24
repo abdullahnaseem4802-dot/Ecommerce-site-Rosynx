@@ -19,6 +19,11 @@ export class SupportController {
     return this.contact.myTickets(userId);
   }
 
+  @Get('unread-count')
+  unreadCount(@CurrentUser('id') userId: string) {
+    return this.contact.unreadCount(userId);
+  }
+
   @Get(':id')
   getOne(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.contact.myTicket(id, userId);

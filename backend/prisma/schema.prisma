@@ -68,6 +68,11 @@ model User {
   // Admin can block an account. Blocked users keep their data and orders but
   // cannot log in; existing tokens are rejected at the guard.
   isActive      Boolean  @default(true)
+  // Password reset via emailed OTP. We store only a hash of the 6-digit code,
+  // never the code itself; expiry + attempt counter throttle brute force.
+  resetOtpHash     String?
+  resetOtpExpiry   DateTime?
+  resetOtpAttempts Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -331,6 +336,11 @@ model ContactMessage {
   subject   String?
   message   String       @db.Text
   isRead    Boolean      @default(false)
+  // Customer-facing unread flag: true when support has replied and the customer
+  // has not yet opened the thread. Drives the notification badge on the account
+  // icon + Support link. Set true on admin reply, cleared when the customer
+  // views the ticket. (isRead above is the *admin*-facing counterpart.)
+  customerUnread Boolean   @default(false)
   status    TicketStatus @default(OPEN)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt @default(now())
@@ -388,6 +398,24 @@ model StoreSetting {
   updatedAt               DateTime @updatedAt @default(now())
 
   @@map("store_settings")
+}
+
+// ----------------------------- FAQ -------------------------------
+// Admin-managed FAQ entries shown on the storefront /faqs page. Modeled on the
+// blog content pattern: public read of published items + admin CRUD.
+
+model FaqItem {
+  id          String   @id @default(cuid())
+  question    String
+  answer      String   @db.Text
+  category    String   @default("General")
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished])
+  @@map("faq_items")
 }
 
 // ---------------------------- Blog -------------------------------

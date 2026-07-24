@@ -20,6 +20,7 @@ import {
 import { useAllProducts } from "@/lib/catalog-client";
 import { useAuth } from "@/lib/auth";
 import { useCartCount, useCartTotal, useHydrated, useShop } from "@/lib/store";
+import { useSupportUnread } from "@/lib/use-support-unread";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { CurrencySwitcher } from "./currency-switcher";
@@ -33,6 +34,7 @@ export function HeaderActions() {
 
   const cartCount = useCartCount();
   const wishlistCount = useShop((s) => s.wishlist.length);
+  const supportUnread = useSupportUnread();
   const user = useAuth((s) => s.user);
   const accountLabel = hydrated && user ? user.name.split(" ")[0] : "Account";
 
@@ -54,6 +56,7 @@ export function HeaderActions() {
         <Trigger
           label={accountLabel}
           icon={<User className="h-6 w-6" />}
+          count={hydrated && user ? supportUnread : 0}
           onClick={() => setOpen(open === "account" ? null : "account")}
         />
         <Dropdown open={open === "account"} align="right" width="w-56">
@@ -274,7 +277,7 @@ function CartPreview({ onNavigate }: { onNavigate: () => void }) {
       </p>
       <ul className="max-h-72 space-y-1 overflow-y-auto">
         {cart.map((l) => (
-          <li key={l.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-cream">
+          <li key={l.apiId} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-cream">
             <Link href={`/product/${l.id}`} onClick={onNavigate} className="relative h-12 w-12 overflow-hidden rounded-lg bg-cream-card">
               <Image src={l.image} alt="" fill sizes="48px" className="object-cover" />
             </Link>
@@ -284,7 +287,7 @@ function CartPreview({ onNavigate }: { onNavigate: () => void }) {
                 {l.qty} × {format(l.price)}
               </span>
             </div>
-            <button onClick={() => remove(l.id)} aria-label="Remove" className="text-muted hover:text-sale">
+            <button onClick={() => remove(l.apiId)} aria-label="Remove" className="text-muted hover:text-sale">
               <Trash2 className="h-4 w-4" />
             </button>
           </li>

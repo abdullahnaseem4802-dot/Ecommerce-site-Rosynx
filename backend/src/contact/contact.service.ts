@@ -14,6 +14,7 @@ const TICKET_SELECT = {
   subject: true,
   message: true,
   status: true,
+  customerUnread: true,
   createdAt: true,
   updatedAt: true,
   replies: {
@@ -60,13 +61,32 @@ export class ContactService {
   }
 
   async myTicket(id: string, userId: string) {
-    const ticket = await this.prisma.contactMessage.findFirst({
+    const exists = await this.prisma.contactMessage.findFirst({
+      where: { id, userId },
+      select: { id: true, customerUnread: true },
+    });
+    // 404 (not 403) on someone else's ticket — don't leak existence.
+    if (!exists) throw new NotFoundException('Ticket not found');
+    // Opening the thread clears the customer's notification for it.
+    if (exists.customerUnread) {
+      await this.prisma.contactMessage.update({
+        where: { id },
+        data: { customerUnread: false },
+      });
+    }
+    return this.prisma.contactMessage.findFirst({
       where: { id, userId },
       select: TICKET_SELECT,
     });
-    // 404 (not 403) on someone else's ticket — don't leak existence.
-    if (!ticket) throw new NotFoundException('Ticket not found');
-    return ticket;
+  }
+
+  /** Count of the customer's tickets with an unseen support reply — powers the
+   *  notification badge on the account icon and the Support link. */
+  async unreadCount(userId: string) {
+    const count = await this.prisma.contactMessage.count({
+      where: { userId, customerUnread: true },
+    });
+    return { count };
   }
 
   async customerReply(id: string, userId: string, body: string) {
@@ -141,7 +161,13 @@ export class ContactService {
 
     const ticket = await this.prisma.contactMessage.update({
       where: { id },
-      data: { status: TicketStatus.ANSWERED, isRead: true },
+      // customerUnread: true lights up the customer's notification badge until
+      // they open the thread (myTicket clears it).
+      data: {
+        status: TicketStatus.ANSWERED,
+        isRead: true,
+        customerUnread: true,
+      },
       include: { replies: { orderBy: { createdAt: 'asc' } } },
     });
 

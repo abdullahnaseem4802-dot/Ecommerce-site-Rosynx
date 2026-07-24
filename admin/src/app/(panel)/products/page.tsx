@@ -18,8 +18,7 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 const BADGE_OPTIONS = ["new", "sale", "limited"] as const;
 
-const STORE_URL =
-  process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3000";
+const UNCATEGORIZED = "__uncat__";
 
 interface FormState {
   id?: string;
@@ -67,6 +66,7 @@ const empty: FormState = {
 export default function ProductsPage() {
   const [cats, setCats] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(empty);
@@ -74,6 +74,7 @@ export default function ProductsPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState<Product | null>(null);
+  const [viewTarget, setViewTarget] = useState<Product | null>(null);
 
   const { data, reload: load } = useCached(
     `products?page=${page}&search=${search}`,
@@ -156,7 +157,7 @@ export default function ProductsPage() {
         priceCents: Math.round(parseFloat(form.price || "0") * 100),
         salePriceCents: form.salePrice
           ? Math.round(parseFloat(form.salePrice) * 100)
-          : undefined,
+          : null,
         stockQty: form.stockQty ? Math.max(0, parseInt(form.stockQty, 10)) : 0,
         material: form.material || undefined,
         dimensions: form.dimensions || undefined,
@@ -191,6 +192,33 @@ export default function ProductsPage() {
     await load();
   }
 
+  async function reassign(p: Product, slug: string) {
+    await api.patch(`/products/${p.id}`, {
+      categorySlugs: slug ? [slug] : [],
+    });
+    await load();
+    setViewTarget((v) =>
+      v && v.id === p.id
+        ? {
+            ...v,
+            categories: slug
+              ? cats
+                  .filter((c) => c.slug === slug)
+                  .map((c) => ({ slug: c.slug, name: c.name }))
+              : [],
+          }
+        : v,
+    );
+  }
+
+  const visibleItems = data
+    ? data.items.filter((p) => {
+        if (!catFilter) return true;
+        if (catFilter === UNCATEGORIZED) return p.categories.length === 0;
+        return p.categories.some((c) => c.slug === catFilter);
+      })
+    : [];
+
   function toggleCat(slug: string) {
     setForm((f) => ({
       ...f,
@@ -223,20 +251,35 @@ export default function ProductsPage() {
         </Button>
       </div>
 
-      <div className="relative mt-5 max-w-sm">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-        />
-        <input
-          value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          placeholder="Search products…"
-          className="w-full rounded-lg border border-line bg-panel-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-copper"
-        />
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+          />
+          <input
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            placeholder="Search products…"
+            className="w-full rounded-lg border border-line bg-panel-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-copper"
+          />
+        </div>
+        <select
+          value={catFilter}
+          onChange={(e) => setCatFilter(e.target.value)}
+          className="rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm outline-none focus:border-copper"
+        >
+          <option value="">All categories</option>
+          <option value={UNCATEGORIZED}>Uncategorized</option>
+          {cats.map((c) => (
+            <option key={c.id} value={c.slug}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -244,7 +287,7 @@ export default function ProductsPage() {
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="skeleton h-24 rounded-2xl" />
             ))
-          : data.items.map((p, i) => (
+          : visibleItems.map((p, i) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 12 }}
@@ -252,71 +295,89 @@ export default function ProductsPage() {
                 transition={{ delay: (i % 12) * 0.03 }}
                 whileHover={{ y: -3 }}
               >
-                <Card className="flex items-center gap-3 p-3">
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-panel-2">
-                    {p.image ? (
-                      <Image
-                        src={p.image}
-                        alt={p.name}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <Package className="absolute inset-0 m-auto text-muted" size={20} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{p.name}</p>
-                    {p.sku && (
-                      <p className="font-mono text-[11px] text-muted">{p.sku}</p>
-                    )}
-                    <p className="text-xs text-muted">
-                      ${p.price}
-                      {p.onSale && (
-                        <span className="ml-1 text-muted line-through">
-                          ${p.regularPriceCents / 100}
-                        </span>
+                <Card className="flex flex-col gap-2 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-panel-2">
+                      {p.image ? (
+                        <Image
+                          src={p.image}
+                          alt={p.name}
+                          fill
+                          sizes="64px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <Package className="absolute inset-0 m-auto text-muted" size={20} />
                       )}
-                      {" · "}
-                      <span
-                        className={
-                          p.stockStatus === "in"
-                            ? "text-good"
-                            : p.stockStatus === "low"
-                              ? "text-warn"
-                              : "text-bad"
-                        }
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{p.name}</p>
+                      {p.sku && (
+                        <p className="font-mono text-[11px] text-muted">{p.sku}</p>
+                      )}
+                      <p className="text-xs text-muted">
+                        ${p.price}
+                        {p.onSale && (
+                          <span className="ml-1 text-muted line-through">
+                            ${p.regularPriceCents / 100}
+                          </span>
+                        )}
+                        {" · "}
+                        <span
+                          className={
+                            p.stockStatus === "in"
+                              ? "text-good"
+                              : p.stockStatus === "low"
+                                ? "text-warn"
+                                : "text-bad"
+                          }
+                        >
+                          {p.stockQty} in stock
+                        </span>
+                      </p>
+                      <p className="truncate text-[11px] text-muted">
+                        {p.categories.length
+                          ? p.categories.map((c) => c.name).join(", ")
+                          : "Uncategorized"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-0.5 self-start">
+                      <button
+                        onClick={() => setViewTarget(p)}
+                        className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
+                        title="View details"
                       >
-                        {p.stockQty} in stock
-                      </span>
-                    </p>
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
+                        title="Edit product"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDel(p)}
+                        className="rounded-lg p-1.5 text-muted hover:bg-bad/10 hover:text-bad"
+                        title="Delete product"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-0.5 self-start">
-                    <a
-                      href={`${STORE_URL}/product/${p.number}`}
-                      target="_blank"
-                      rel="noopener"
-                      className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
-                      title="Preview on store"
-                    >
-                      <Eye size={15} />
-                    </a>
-                    <button
-                      onClick={() => openEdit(p)}
-                      className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
-                      title="Edit product"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDel(p)}
-                      className="rounded-lg p-1.5 text-muted hover:bg-bad/10 hover:text-bad"
-                      title="Delete product"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                  <select
+                    value={p.categories[0]?.slug ?? ""}
+                    onChange={(e) => reassign(p, e.target.value)}
+                    title="Reassign category"
+                    className="w-full rounded-lg border border-line bg-panel-2 px-2 py-1.5 text-xs outline-none focus:border-copper"
+                  >
+                    <option value="">Uncategorized</option>
+                    {cats.map((c) => (
+                      <option key={c.id} value={c.slug}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </Card>
               </motion.div>
             ))}
@@ -378,7 +439,7 @@ export default function ProductsPage() {
               required
             />
             <Input
-              label="Sale ($)"
+              label="Discount price ($)"
               type="number"
               step="0.01"
               value={form.salePrice}
@@ -582,6 +643,110 @@ export default function ProductsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* View details */}
+      <Modal
+        open={!!viewTarget}
+        onClose={() => setViewTarget(null)}
+        title="Product details"
+      >
+        {viewTarget && (
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+            <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-panel-2">
+              {viewTarget.image ? (
+                <Image
+                  src={viewTarget.image}
+                  alt={viewTarget.name}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 512px"
+                  className="object-cover"
+                />
+              ) : (
+                <Package
+                  className="absolute inset-0 m-auto text-muted"
+                  size={28}
+                />
+              )}
+            </div>
+            {viewTarget.images && viewTarget.images.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {viewTarget.images.map((url) => (
+                  <div
+                    key={url}
+                    className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+                  >
+                    <Image
+                      src={url}
+                      alt=""
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div>
+              <p className="text-lg font-semibold">{viewTarget.name}</p>
+              {viewTarget.sku && (
+                <p className="font-mono text-xs text-muted">{viewTarget.sku}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 text-sm">
+              <span className="font-semibold text-fg">${viewTarget.price}</span>
+              {viewTarget.onSale && (
+                <span className="text-muted line-through">
+                  ${viewTarget.regularPriceCents / 100}
+                </span>
+              )}
+              <span
+                className={
+                  viewTarget.stockStatus === "in"
+                    ? "text-good"
+                    : viewTarget.stockStatus === "low"
+                      ? "text-warn"
+                      : "text-bad"
+                }
+              >
+                {viewTarget.stockQty} in stock
+              </span>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted">
+                Categories
+              </p>
+              <p className="mt-1 text-sm text-fg">
+                {viewTarget.categories.length
+                  ? viewTarget.categories.map((c) => c.name).join(", ")
+                  : "Uncategorized"}
+              </p>
+            </div>
+            {viewTarget.short && (
+              <div>
+                <p className="text-xs font-semibold uppercase text-muted">
+                  Short description
+                </p>
+                <p className="mt-1 text-sm text-fg">{viewTarget.short}</p>
+              </div>
+            )}
+            {viewTarget.description && (
+              <div>
+                <p className="text-xs font-semibold uppercase text-muted">
+                  Description
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-fg">
+                  {viewTarget.description}
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button variant="ghost" onClick={() => setViewTarget(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Delete confirm */}

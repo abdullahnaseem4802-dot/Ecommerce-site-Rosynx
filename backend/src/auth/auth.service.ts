@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,7 +11,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -18,10 +22,13 @@ export const SUSPENDED_MESSAGE =
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly email: EmailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -101,6 +108,87 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
     return { changed: true };
+  }
+
+  /**
+   * Step 1 of the forgot-password flow: email a 6-digit OTP. We ALWAYS return
+   * ok, whether or not the email exists, so this can't be used to enumerate
+   * accounts. Only a hash of the code is stored; it expires in 15 minutes.
+   */
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (user && user.isActive) {
+      const otp = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      const resetOtpHash = await bcrypt.hash(otp, 10);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetOtpHash,
+          resetOtpExpiry: new Date(Date.now() + 15 * 60 * 1000),
+          resetOtpAttempts: 0,
+        },
+      });
+      try {
+        await this.email.passwordResetOtp(user.email, user.name, otp);
+      } catch (e) {
+        this.logger.error(`reset OTP email to ${user.email} failed`, e as Error);
+      }
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Step 2: verify the OTP and set a new password. Throttled to 5 wrong tries,
+   * after which the code is burned and a new one must be requested.
+   */
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    if (!newPassword || newPassword.length < 8)
+      throw new BadRequestException('New password must be at least 8 characters');
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    const invalid = new BadRequestException('Invalid or expired reset code');
+    if (!user || !user.resetOtpHash || !user.resetOtpExpiry) throw invalid;
+
+    if (user.resetOtpExpiry < new Date()) {
+      await this.clearOtp(user.id);
+      throw new BadRequestException('Reset code expired — request a new one');
+    }
+    if (user.resetOtpAttempts >= 5) {
+      await this.clearOtp(user.id);
+      throw new BadRequestException('Too many attempts — request a new code');
+    }
+
+    const ok = await bcrypt.compare(otp.trim(), user.resetOtpHash);
+    if (!ok) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { resetOtpAttempts: { increment: 1 } },
+      });
+      throw invalid;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetOtpHash: null,
+        resetOtpExpiry: null,
+        resetOtpAttempts: 0,
+      },
+    });
+    return { reset: true };
+  }
+
+  private async clearOtp(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { resetOtpHash: null, resetOtpExpiry: null, resetOtpAttempts: 0 },
+    });
   }
 
   private async buildAuthResponse(user: User) {

@@ -109,6 +109,14 @@ export const api = {
       password,
     }),
   me: () => request<ApiUser>("GET", "/auth/me"),
+  forgotPassword: (email: string) =>
+    request<{ ok: true }>("POST", "/auth/forgot-password", { email }),
+  resetPassword: (email: string, otp: string, newPassword: string) =>
+    request<{ reset: boolean }>("POST", "/auth/reset-password", {
+      email,
+      otp,
+      newPassword,
+    }),
 
   // cart
   getCart: () => request<ApiCart>("GET", "/cart"),
@@ -163,6 +171,8 @@ export const api = {
   deleteAddress: (id: string) => request<void>("DELETE", `/addresses/${id}`),
 
   // support tickets
+  supportUnreadCount: () =>
+    request<{ count: number }>("GET", "/support/unread-count"),
   myTickets: () => request<Ticket[]>("GET", "/support/mine"),
   getTicket: (id: string) => request<Ticket>("GET", `/support/${id}`),
   replyToTicket: (id: string, body: string) =>
@@ -283,5 +293,7 @@ export interface Ticket {
   status: "OPEN" | "ANSWERED" | "CLOSED";
   createdAt: string;
   updatedAt: string;
+  /** True when support has replied and the customer hasn't opened the thread. */
+  customerUnread?: boolean;
   replies: TicketReply[];
 }

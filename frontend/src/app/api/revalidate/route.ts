@@ -27,6 +27,7 @@ const ALLOWED = [
   /^\/blog\/[a-z0-9-]+$/i,
   /^\/blog\/\[slug\]$/,
   /^\/contact$/,
+  /^\/faqs$/,
 ];
 
 const isAllowed = (p: string) => ALLOWED.some((re) => re.test(p));

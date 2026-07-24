@@ -77,4 +77,9 @@ export class RevalidateService {
   settings(): void {
     this.purge(['/', '/shop', '/contact']);
   }
+
+  /** An FAQ entry changed. */
+  faq(): void {
+    this.purge(['/faqs']);
+  }
 }

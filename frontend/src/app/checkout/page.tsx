@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
+import { CouponBox } from "@/components/cart/coupon-box";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { Combobox } from "./Combobox";
@@ -59,7 +60,12 @@ const required: (keyof Form)[] = [
   "address",
   "city",
   "country",
+  "postal",
 ];
+
+// A pragmatic email check — stricter than "contains @", lenient enough not to
+// reject valid real-world addresses.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Saved addresses persist country/state as *names*, matching what the order
@@ -310,7 +316,7 @@ export default function CheckoutPage() {
     required.forEach((k) => {
       if (!form[k].trim()) nextErrors[k] = true;
     });
-    if (!form.email.includes("@")) nextErrors.email = true;
+    if (!EMAIL_RE.test(form.email.trim())) nextErrors.email = true;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     if (cart.length === 0) return;
@@ -487,7 +493,7 @@ export default function CheckoutPage() {
                     error={errors.city}
                   />
                 )}
-                <Input label="Postal / ZIP code" value={form.postal} onChange={(v) => set("postal", v)} />
+                <Input label="Postal / ZIP code" value={form.postal} onChange={(v) => set("postal", v)} error={errors.postal} />
                 <PhoneField
                   label="Phone"
                   options={dialOptions}
@@ -557,7 +563,7 @@ export default function CheckoutPage() {
             <ul className="mt-4 space-y-3">
               {hydrated &&
                 cart.map((l) => (
-                  <li key={l.id} className="flex items-center gap-3">
+                  <li key={l.apiId} className="flex items-center gap-3">
                     <span className="relative h-12 w-12 overflow-hidden rounded-lg bg-cream-card">
                       <Image src={l.image} alt="" fill sizes="48px" className="object-cover" />
                     </span>
@@ -571,6 +577,9 @@ export default function CheckoutPage() {
                   </li>
                 ))}
             </ul>
+            <div className="mt-4 border-t border-line pt-4">
+              <CouponBox subtotal={subtotal} />
+            </div>
             <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted">Subtotal</dt>

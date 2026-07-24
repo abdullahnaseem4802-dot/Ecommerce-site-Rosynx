@@ -168,6 +168,20 @@ export class ProductsService {
         categories: dto.categorySlugs
           ? { set: dto.categorySlugs.map((s) => ({ slug: s })) }
           : undefined,
+        // Sync the gallery on edit. The admin form always submits the full,
+        // ordered image list, so replace wholesale: drop the old rows and
+        // recreate. Omitting `images` leaves the gallery untouched.
+        images: dto.images
+          ? {
+              deleteMany: {},
+              create: dto.images.map((img, i) => ({
+                url: img.url,
+                alt: img.alt,
+                isPrimary: img.isPrimary ?? i === 0,
+                position: i,
+              })),
+            }
+          : undefined,
       },
       include: withRelations,
     });

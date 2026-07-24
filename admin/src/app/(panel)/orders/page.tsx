@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ShoppingCart, Eye } from "lucide-react";
+import { ShoppingCart, Eye } from "lucide-react";
 import { api, Order } from "@/lib/api";
 import { Card, StatusPill } from "@/components/ui";
 import { useCached } from "@/lib/use-cached";
@@ -94,19 +94,12 @@ export default function OrdersPage() {
                     </span>
                   </button>
                   <button
-                    onClick={() => setOpen(o.id)}
+                    onClick={() => setOpen(open === o.id ? null : o.id)}
                     className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
                     title="View order"
                   >
                     <Eye size={15} />
                   </button>
-                  <motion.button
-                    onClick={() => setOpen(open === o.id ? null : o.id)}
-                    animate={{ rotate: open === o.id ? 180 : 0 }}
-                    className="text-muted"
-                  >
-                    <ChevronDown size={16} />
-                  </motion.button>
                 </div>
 
                 <AnimatePresence initial={false}>

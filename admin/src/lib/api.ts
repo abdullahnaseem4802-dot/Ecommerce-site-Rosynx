@@ -344,6 +344,16 @@ export interface Order {
   shippingAddress: Record<string, string> | null;
   createdAt: string;
 }
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  sortOrder: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Coupon {
   id: string;
   code: string;

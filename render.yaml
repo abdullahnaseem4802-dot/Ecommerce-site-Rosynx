@@ -46,6 +46,21 @@ services:
         sync: false
       - key: BASE_CURRENCY
         value: USD
+      # Email delivery (Resend). Order confirmations, support replies, coupon
+      # broadcasts and password-reset OTPs all send through this. Set
+      # EMAIL_PROVIDER=resend and paste RESEND_API_KEY in the dashboard to go
+      # live; leave it unset (or console) and emails are only logged.
+      # EMAIL_FROM must be a verified Resend sender/domain. Until you verify a
+      # domain, "ROSYNX <onboarding@resend.dev>" works but only delivers to the
+      # Resend account owner's own email.
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: ROSYNX <onboarding@resend.dev>
+      - key: SUPPORT_EMAIL
+        sync: false
       # Keep Neon awake so the first request isn't a cold start. Note this only
       # runs while the process is alive — see SELF_URL below.
       - key: DB_KEEPALIVE

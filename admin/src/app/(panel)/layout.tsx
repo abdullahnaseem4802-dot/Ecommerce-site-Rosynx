@@ -18,6 +18,7 @@ import {
   Mail,
   AtSign,
   Newspaper,
+  HelpCircle,
   LogOut,
   ExternalLink,
   Search,
@@ -40,6 +41,7 @@ const nav = [
   { href: "/messages", label: "Messages", icon: Mail },
   { href: "/subscribers", label: "Subscribers", icon: AtSign },
   { href: "/blog", label: "Blog", icon: Newspaper },
+  { href: "/faq", label: "FAQs", icon: HelpCircle },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

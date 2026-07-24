@@ -191,7 +191,8 @@ export type Product = {
   apiId: string; // backend product id (cuid) — used for cart/checkout API calls
   slug: string;
   name: string;
-  category: string; // category slug
+  category: string; // primary category slug
+  categorySlugs?: string[]; // all category slugs this product belongs to
   categoryName: string;
   material: string; // material slug
   price: number;

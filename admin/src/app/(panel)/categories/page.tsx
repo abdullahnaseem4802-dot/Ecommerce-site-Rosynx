@@ -4,13 +4,11 @@ import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Tags, Plus, Pencil, Trash2, Eye } from "lucide-react";
-import { api, Category, getToken } from "@/lib/api";
+import { api, Category, Paginated, Product, getToken } from "@/lib/api";
 import { Button, Card, Input, Modal, Spinner } from "@/components/ui";
 import { useCached } from "@/lib/use-cached";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
-const STORE_URL =
-  process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3000";
 
 interface FormState {
   id?: string;
@@ -38,7 +36,13 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [viewTarget, setViewTarget] = useState<Category | null>(null);
+
+  // Delete + reassign
   const [confirmDel, setConfirmDel] = useState<Category | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState("");
 
   function openCreate() {
     setForm(empty);
@@ -100,10 +104,36 @@ export default function CategoriesPage() {
     }
   }
 
+  function openDelete(c: Category) {
+    setConfirmDel(c);
+    setMoveTo("");
+    setDelError("");
+  }
+
   async function del(c: Category) {
-    await api.del(`/categories/${c.id}`);
-    setConfirmDel(null);
-    await load();
+    setDelError("");
+    setDeleting(true);
+    try {
+      if (moveTo && c.productCount > 0) {
+        const res = await api.get<Paginated<Product>>(
+          `/products?category=${c.slug}&limit=500`,
+        );
+        for (const p of res.items) {
+          const slugs = p.categories
+            .map((x) => x.slug)
+            .filter((s) => s !== c.slug);
+          if (!slugs.includes(moveTo)) slugs.push(moveTo);
+          await api.patch(`/products/${p.id}`, { categorySlugs: slugs });
+        }
+      }
+      await api.del(`/categories/${c.id}`);
+      setConfirmDel(null);
+      await load();
+    } catch (err) {
+      setDelError((err as Error).message);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -156,15 +186,13 @@ export default function CategoriesPage() {
                       {c.featured ? " · featured" : ""}
                     </p>
                   </div>
-                  <a
-                    href={`${STORE_URL}/shop?category=${c.slug}`}
-                    target="_blank"
-                    rel="noopener"
+                  <button
+                    onClick={() => setViewTarget(c)}
                     className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
-                    title="View in store"
+                    title="View details"
                   >
                     <Eye size={15} />
-                  </a>
+                  </button>
                   <button
                     onClick={() => openEdit(c)}
                     className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
@@ -172,7 +200,7 @@ export default function CategoriesPage() {
                     <Pencil size={15} />
                   </button>
                   <button
-                    onClick={() => setConfirmDel(c)}
+                    onClick={() => openDelete(c)}
                     className="rounded-lg p-1.5 text-muted hover:bg-bad/10 hover:text-bad"
                   >
                     <Trash2 size={15} />
@@ -271,6 +299,65 @@ export default function CategoriesPage() {
         </form>
       </Modal>
 
+      {/* View details */}
+      <Modal
+        open={!!viewTarget}
+        onClose={() => setViewTarget(null)}
+        title="Category details"
+      >
+        {viewTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-copper/15 text-copper-light">
+                {viewTarget.image ? (
+                  <Image
+                    src={viewTarget.image}
+                    alt={viewTarget.name}
+                    fill
+                    sizes="64px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <Tags size={24} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg font-semibold capitalize">
+                  {viewTarget.name}
+                </p>
+                <p className="font-mono text-xs text-muted">{viewTarget.slug}</p>
+              </div>
+            </div>
+            {viewTarget.description && (
+              <p className="text-sm text-muted">{viewTarget.description}</p>
+            )}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg bg-panel-2 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted">
+                  Products
+                </p>
+                <p className="mt-1 font-semibold text-fg">
+                  {viewTarget.productCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-panel-2 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted">
+                  Featured
+                </p>
+                <p className="mt-1 font-semibold text-fg">
+                  {viewTarget.featured ? "Yes" : "No"}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button variant="ghost" onClick={() => setViewTarget(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Delete confirm */}
       <Modal
         open={!!confirmDel}
@@ -282,12 +369,47 @@ export default function CategoriesPage() {
           <span className="font-medium text-fg">{confirmDel?.name}</span>? This
           cannot be undone.
         </p>
+        {confirmDel && confirmDel.productCount > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm text-muted">
+              This category has{" "}
+              <span className="font-medium text-fg">
+                {confirmDel.productCount}
+              </span>{" "}
+              product{confirmDel.productCount === 1 ? "" : "s"}.
+            </p>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">
+                Move these products to:
+              </span>
+              <select
+                value={moveTo}
+                onChange={(e) => setMoveTo(e.target.value)}
+                className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm outline-none focus:border-copper"
+              >
+                <option value="">Leave uncategorized</option>
+                {cats
+                  ?.filter((c) => c.id !== confirmDel.id)
+                  .map((c) => (
+                    <option key={c.id} value={c.slug}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {delError && <p className="mt-3 text-sm text-bad">{delError}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setConfirmDel(null)}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={() => confirmDel && del(confirmDel)}>
-            <Trash2 size={15} /> Delete
+          <Button
+            variant="danger"
+            disabled={deleting}
+            onClick={() => confirmDel && del(confirmDel)}
+          >
+            {deleting ? <Spinner /> : <Trash2 size={15} />} Delete
           </Button>
         </div>
       </Modal>

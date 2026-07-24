@@ -78,13 +78,13 @@ export function ProductDetail({ product }: { product: Product }) {
                   active === i ? "border-brand" : "border-line hover:border-brand/40",
                 )}
               >
-                <Image src={img} alt="" fill sizes="80px" className="object-cover" />
+                <Image src={img} alt="" fill sizes="80px" className="object-contain" />
               </button>
             ))}
           </div>
 
           <div
-            className="relative aspect-square flex-1 overflow-hidden rounded-3xl border border-line/60 bg-cream-card"
+            className="relative aspect-[4/5] flex-1 overflow-hidden rounded-3xl border border-line/60 bg-cream-card"
             onMouseMove={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setZoom({
@@ -101,7 +101,7 @@ export function ProductDetail({ product }: { product: Product }) {
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 560px"
-              className="object-cover transition-transform duration-200"
+              className="object-contain transition-transform duration-200"
               style={{
                 transform: zoom.on ? "scale(1.8)" : "scale(1)",
                 transformOrigin: `${zoom.x}% ${zoom.y}%`,
@@ -150,10 +150,11 @@ export function ProductDetail({ product }: { product: Product }) {
             )}
           </div>
 
-          <p className="mt-4 text-sm leading-relaxed text-coffee/75">
-            {product.short} Each piece is individually crafted, so subtle
-            variations in grain and tone make your item one of a kind.
-          </p>
+          {product.short && (
+            <p className="mt-4 text-sm leading-relaxed text-coffee/75">
+              {product.short}
+            </p>
+          )}
 
           {/* Stock */}
           <div className="mt-4 flex items-center gap-2 text-sm">
@@ -282,33 +283,16 @@ export function ProductDetail({ product }: { product: Product }) {
         <div className="py-6 text-sm leading-relaxed text-coffee/80">
           {tab === "Description" && (
             <div className="max-w-3xl space-y-4">
-              {product.description ? (
+              {product.description && product.description.trim() ? (
                 product.description
                   .split(/\n{2,}|\n/)
                   .filter((p) => p.trim())
                   .map((para, i) => <p key={i}>{para}</p>)
               ) : (
-                <>
-                  <p>
-                    The {product.name} is a celebration of traditional
-                    craftsmanship
-                    {product.material ? `, made from ${product.material}` : ""}. It
-                    is shaped, finished and inspected by hand in small batches —
-                    never mass-produced.
-                  </p>
-                  <p>
-                    Designed to sit beautifully in modern and traditional
-                    interiors alike, it brings warmth, texture and a sense of story
-                    to any space. Because every piece is handmade, slight
-                    variations are a natural mark of authenticity.
-                  </p>
-                </>
+                <p className="text-muted">
+                  No description has been added for this product yet.
+                </p>
               )}
-              <ul className="list-inside list-disc space-y-1 text-coffee/75">
-                <li>100% handmade by skilled artisans</li>
-                <li>Premium, responsibly sourced materials</li>
-                <li>Includes a certificate of authenticity</li>
-              </ul>
             </div>
           )}
 

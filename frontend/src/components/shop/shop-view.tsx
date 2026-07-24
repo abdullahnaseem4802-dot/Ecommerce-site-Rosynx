@@ -25,6 +25,46 @@ import { Filters, defaultFilters, type ShopFilters } from "./filters";
 
 const PAGE_SIZES = [12, 24, 48];
 
+// Reactively track the URL query string WITHOUT useSearchParams() (which would
+// force a client-side bailout and break /shop's static/edge caching — see the
+// project convention). Because a header/category link to `/shop?category=x`
+// while already on /shop is a client nav that does NOT remount this component,
+// we also listen for pushState/replaceState (patched to emit an event) so the
+// deep-link re-applies every time, not just on first mount.
+function useLocationSearch(): string {
+  const [search, setSearch] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.search,
+  );
+  useEffect(() => {
+    const update = () => setSearch(window.location.search);
+    update();
+
+    const origPush = window.history.pushState;
+    const origReplace = window.history.replaceState;
+    const emit = () => window.dispatchEvent(new Event("rosynx:locationchange"));
+    window.history.pushState = function (...args) {
+      const r = origPush.apply(this, args);
+      emit();
+      return r;
+    };
+    window.history.replaceState = function (...args) {
+      const r = origReplace.apply(this, args);
+      emit();
+      return r;
+    };
+
+    window.addEventListener("popstate", update);
+    window.addEventListener("rosynx:locationchange", update);
+    return () => {
+      window.removeEventListener("popstate", update);
+      window.removeEventListener("rosynx:locationchange", update);
+      window.history.pushState = origPush;
+      window.history.replaceState = origReplace;
+    };
+  }, []);
+  return search;
+}
+
 export function ShopView({
   products,
   categories,
@@ -44,13 +84,20 @@ export function ShopView({
     price: [bounds.min, bounds.max],
   });
 
-  // Apply a ?category= deep-link AFTER mount (read from the URL on the client).
-  // Doing this here — instead of on the server via searchParams — keeps the
-  // /shop page statically renderable so Vercel can edge-cache it.
+  // Apply a ?category= deep-link on the client (never via server searchParams,
+  // which would break /shop's static/edge caching). Re-runs on every URL change
+  // so selecting a header category filters even when already on /shop.
+  const search = useLocationSearch();
   useEffect(() => {
-    const cat = new URLSearchParams(window.location.search).get("category");
-    if (cat) setFilters((f) => ({ ...f, categories: [cat] }));
-  }, []);
+    const cat = new URLSearchParams(search).get("category");
+    setFilters((f) =>
+      cat
+        ? f.categories.length === 1 && f.categories[0] === cat
+          ? f
+          : { ...f, categories: [cat] }
+        : f,
+    );
+  }, [search]);
   const [sort, setSort] = useState("featured");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [pageSize, setPageSize] = useState(12);
@@ -68,8 +115,10 @@ export function ShopView({
 
   const filtered = useMemo(() => {
     let list = ALL.filter((p) => {
-      if (filters.categories.length && !filters.categories.includes(p.category))
-        return false;
+      if (filters.categories.length) {
+        const slugs = p.categorySlugs?.length ? p.categorySlugs : [p.category];
+        if (!filters.categories.some((c) => slugs.includes(c))) return false;
+      }
       if (filters.materials.length && !filters.materials.includes(p.material))
         return false;
       if (p.price < filters.price[0] || p.price > filters.price[1]) return false;

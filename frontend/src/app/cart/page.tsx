@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Minus, Plus, ShoppingBag, Tag, Trash2, Truck, X } from "lucide-react";
+import { Check, Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
 import { useCartTotal, useHydrated, useShop, type CartLine } from "@/lib/store";
 import type { Product } from "@/lib/data";
-import { api } from "@/lib/api";
 import { Container } from "@/components/ui/container";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ButtonLink } from "@/components/ui/button";
+import { CouponBox } from "@/components/cart/coupon-box";
 import { useMoney } from "@/lib/currency";
 
 export default function CartPage() {
@@ -19,39 +19,18 @@ export default function CartPage() {
   const remove = useShop((s) => s.removeFromCart);
   const addToCart = useShop((s) => s.addToCart);
   const coupon = useShop((s) => s.coupon);
-  const setCoupon = useShop((s) => s.setCoupon);
   const { format } = useMoney();
   const subtotal = useCartTotal();
 
   const [saved, setSaved] = useState<CartLine[]>([]);
-  const [code, setCode] = useState("");
-  const [couponError, setCouponError] = useState("");
 
   const discount = coupon ? Math.min(coupon.discountCents / 100, subtotal) : 0;
   const shipping = 0; // free shipping (store policy)
   const total = subtotal - discount + shipping;
 
-  const applyCoupon = async () => {
-    setCouponError("");
-    try {
-      const res = await api.validateCoupon(
-        code.trim().toUpperCase(),
-        Math.round(subtotal * 100),
-      );
-      if (res.valid) {
-        setCoupon({ code: res.code, discountCents: res.discountCents });
-      } else {
-        setCouponError(res.reason || "Invalid coupon code.");
-        setCoupon(null);
-      }
-    } catch {
-      setCouponError("Could not validate coupon. Try again.");
-    }
-  };
-
   const saveForLater = (line: CartLine) => {
-    remove(line.id);
-    setSaved((s) => (s.find((x) => x.id === line.id) ? s : [...s, line]));
+    remove(line.apiId);
+    setSaved((s) => (s.find((x) => x.apiId === line.apiId) ? s : [...s, line]));
   };
   const moveToCart = (line: CartLine) => {
     // Rebuild a minimal Product from the saved line (addToCart only reads
@@ -65,7 +44,7 @@ export default function CartPage() {
       images: [line.image],
     } as Product;
     addToCart(p, line.qty);
-    setSaved((s) => s.filter((x) => x.id !== line.id));
+    setSaved((s) => s.filter((x) => x.apiId !== line.apiId));
   };
 
   return (
@@ -97,7 +76,7 @@ export default function CartPage() {
           <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">
               {cart.map((l) => (
-                <div key={l.id} className="flex gap-4 rounded-2xl border border-line/60 bg-white p-3 sm:p-4">
+                <div key={l.apiId} className="flex gap-4 rounded-2xl border border-line/60 bg-white p-3 sm:p-4">
                   <Link href={`/product/${l.id}`} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-cream-card sm:h-28 sm:w-28">
                     <Image src={l.image} alt={l.name} fill sizes="112px" className="object-cover" />
                   </Link>
@@ -108,11 +87,11 @@ export default function CartPage() {
                     <span className="mt-1 text-sm text-muted">{format(l.price)} each</span>
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
                       <div className="flex items-center rounded-full border border-line">
-                        <button onClick={() => setQty(l.id, l.qty - 1)} className="flex h-9 w-9 items-center justify-center text-coffee hover:text-brand" aria-label="Decrease">
+                        <button onClick={() => setQty(l.apiId, l.qty - 1)} className="flex h-9 w-9 items-center justify-center text-coffee hover:text-brand" aria-label="Decrease">
                           <Minus className="h-4 w-4" />
                         </button>
                         <span className="w-8 text-center text-sm font-semibold">{l.qty}</span>
-                        <button onClick={() => setQty(l.id, l.qty + 1)} className="flex h-9 w-9 items-center justify-center text-coffee hover:text-brand" aria-label="Increase">
+                        <button onClick={() => setQty(l.apiId, l.qty + 1)} className="flex h-9 w-9 items-center justify-center text-coffee hover:text-brand" aria-label="Increase">
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
@@ -121,7 +100,7 @@ export default function CartPage() {
                         <button onClick={() => saveForLater(l)} className="text-xs font-medium text-muted transition hover:text-brand">
                           Save for later
                         </button>
-                        <button onClick={() => remove(l.id)} aria-label="Remove item" className="text-muted transition hover:text-sale">
+                        <button onClick={() => remove(l.apiId)} aria-label="Remove item" className="text-muted transition hover:text-sale">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -138,7 +117,7 @@ export default function CartPage() {
                   </h3>
                   <div className="space-y-3">
                     {saved.map((l) => (
-                      <div key={l.id} className="flex items-center gap-4 rounded-2xl border border-line/60 bg-cream-soft p-3">
+                      <div key={l.apiId} className="flex items-center gap-4 rounded-2xl border border-line/60 bg-cream-soft p-3">
                         <Link href={`/product/${l.id}`} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-cream-card">
                           <Image src={l.image} alt={l.name} fill sizes="64px" className="object-cover" />
                         </Link>
@@ -164,32 +143,7 @@ export default function CartPage() {
 
                   {/* Coupon */}
                   <div className="mt-4">
-                    {coupon ? (
-                      <div className="flex items-center justify-between rounded-xl bg-newtag/10 px-3 py-2.5 text-sm">
-                        <span className="flex items-center gap-2 font-medium text-newtag">
-                          <Tag className="h-4 w-4" /> {coupon.code} applied
-                        </span>
-                        <button onClick={() => setCoupon(null)} aria-label="Remove coupon" className="text-muted hover:text-sale">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex gap-2">
-                          <input
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            placeholder="Coupon code"
-                            className="flex-1 rounded-xl border border-line bg-cream-soft px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
-                          />
-                          <button onClick={applyCoupon} className="rounded-xl bg-espresso px-4 text-sm font-semibold text-cream transition hover:bg-coffee">
-                            Apply
-                          </button>
-                        </div>
-                        {couponError && <p className="mt-1.5 text-xs text-sale">{couponError}</p>}
-                        <p className="mt-1.5 text-xs text-muted">Try ROSYNX10 or WELCOME15</p>
-                      </div>
-                    )}
+                    <CouponBox subtotal={subtotal} />
                   </div>
 
                   <dl className="mt-4 space-y-3 border-t border-line pt-4 text-sm">

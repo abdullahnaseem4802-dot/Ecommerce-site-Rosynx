@@ -8,7 +8,6 @@ import {
   Ban,
   Check,
   CheckCircle2,
-  KeyRound,
   MapPin,
   Package,
   Pencil,
@@ -45,14 +44,6 @@ export default function CustomerDetailPage({
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
 
-  // Reset password
-  const [pwOpen, setPwOpen] = useState(false);
-  const [pw, setPw] = useState("");
-  const [pw2, setPw2] = useState("");
-  const [savingPw, setSavingPw] = useState(false);
-  const [pwError, setPwError] = useState("");
-  const [pwDone, setPwDone] = useState<string | null>(null);
-
   // Block / unblock
   const [statusTarget, setStatusTarget] = useState<CustomerDetail | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -62,14 +53,6 @@ export default function CustomerDetailPage({
     setForm({ name: c.name, phone: c.phone ?? "" });
     setEditError("");
     setEditOpen(true);
-  }
-
-  function openPw() {
-    setPw("");
-    setPw2("");
-    setPwError("");
-    setPwDone(null);
-    setPwOpen(true);
   }
 
   async function saveDetails(e: React.FormEvent) {
@@ -87,30 +70,6 @@ export default function CustomerDetailPage({
       setEditError((err as Error).message);
     } finally {
       setSavingEdit(false);
-    }
-  }
-
-  async function resetPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setPwError("");
-    if (pw.length < 8) {
-      setPwError("Password must be at least 8 characters.");
-      return;
-    }
-    if (pw !== pw2) {
-      setPwError("Passwords do not match.");
-      return;
-    }
-    setSavingPw(true);
-    try {
-      await api.post(`/admin/customers/${id}/reset-password`, { newPassword: pw });
-      setPwDone(pw);
-      setPw("");
-      setPw2("");
-    } catch (err) {
-      setPwError((err as Error).message);
-    } finally {
-      setSavingPw(false);
     }
   }
 
@@ -207,9 +166,6 @@ export default function CustomerDetailPage({
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="ghost" onClick={() => openEdit(customer)}>
                 <Pencil size={15} /> Edit details
-              </Button>
-              <Button variant="ghost" onClick={openPw}>
-                <KeyRound size={15} /> Reset password
               </Button>
               <Button
                 variant={customer.isActive ? "danger" : "subtle"}
@@ -379,69 +335,6 @@ export default function CustomerDetailPage({
             </Button>
           </div>
         </form>
-      </Modal>
-
-      {/* Reset password */}
-      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title="Reset password">
-        {pwDone ? (
-          <div className="space-y-4">
-            <p className="text-sm text-good">
-              Password updated for{" "}
-              <span className="font-medium">{customer.name}</span>.
-            </p>
-            <div className="rounded-lg border border-line bg-panel-2 p-3">
-              <p className="text-xs font-medium text-muted">New password</p>
-              <p className="mt-1 select-all break-all font-mono text-sm text-fg">
-                {pwDone}
-              </p>
-            </div>
-            <p className="text-sm text-muted">
-              This is shown once. The customer is{" "}
-              <span className="font-medium text-fg">not</span> emailed this password —
-              pass it to them yourself through a secure channel. Once you close this
-              dialog it can&apos;t be retrieved.
-            </p>
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setPwOpen(false)}>Done</Button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={resetPassword} className="space-y-4">
-            <p className="text-sm text-muted">
-              Set a new password for{" "}
-              <span className="font-medium text-fg">{customer.email}</span>.
-            </p>
-            <p className="rounded-lg border border-warn/30 bg-warn/10 p-3 text-sm text-warn">
-              This immediately invalidates the customer&apos;s current password. They
-              won&apos;t be able to log in until you give them the new one.
-            </p>
-            <Input
-              label="New password"
-              type="password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              placeholder="At least 8 characters"
-              required
-            />
-            <Input
-              label="Confirm new password"
-              type="password"
-              value={pw2}
-              onChange={(e) => setPw2(e.target.value)}
-              required
-            />
-            {pwError && <p className="text-sm text-bad">{pwError}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setPwOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={savingPw}>
-                {savingPw ? <Spinner /> : <KeyRound size={15} />}
-                Reset password
-              </Button>
-            </div>
-          </form>
-        )}
       </Modal>
 
       {/* Block / Unblock confirm */}

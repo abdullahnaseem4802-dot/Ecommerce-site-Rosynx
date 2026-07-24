@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Pencil, Trash2, TicketPercent } from "lucide-react";
+import { Plus, Pencil, Trash2, TicketPercent, Send } from "lucide-react";
 import { api, Coupon } from "@/lib/api";
 import { Button, Card, Input, Modal, Spinner } from "@/components/ui";
 import { useCached } from "@/lib/use-cached";
@@ -12,14 +12,12 @@ interface Form {
   code: string;
   type: "PERCENT" | "FIXED";
   value: string;
-  minSubtotal: string;
   isActive: boolean;
 }
 const empty: Form = {
   code: "",
   type: "PERCENT",
   value: "",
-  minSubtotal: "",
   isActive: true,
 };
 
@@ -32,6 +30,12 @@ export default function CouponsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Broadcast to subscribers
+  const [broadcastTarget, setBroadcastTarget] = useState<Coupon | null>(null);
+  const [sending, setSending] = useState(false);
+  const [broadcastError, setBroadcastError] = useState("");
+  const [broadcastNote, setBroadcastNote] = useState("");
+
   function openCreate() {
     setForm(empty);
     setError("");
@@ -43,7 +47,6 @@ export default function CouponsPage() {
       code: c.code,
       type: c.type,
       value: c.type === "FIXED" ? String(c.value / 100) : String(c.value),
-      minSubtotal: c.minSubtotalCents ? String(c.minSubtotalCents / 100) : "",
       isActive: c.isActive,
     });
     setError("");
@@ -62,9 +65,6 @@ export default function CouponsPage() {
           form.type === "FIXED"
             ? Math.round(parseFloat(form.value || "0") * 100)
             : Math.round(parseFloat(form.value || "0")),
-        minSubtotalCents: form.minSubtotal
-          ? Math.round(parseFloat(form.minSubtotal) * 100)
-          : 0,
         isActive: form.isActive,
       };
       if (form.id) await api.patch(`/coupons/${form.id}`, payload);
@@ -83,6 +83,25 @@ export default function CouponsPage() {
     await load();
   }
 
+  async function broadcast(c: Coupon) {
+    setBroadcastError("");
+    setSending(true);
+    try {
+      const res = await api.post<{ sent: number; total: number }>(
+        `/coupons/${c.id}/broadcast`,
+        {},
+      );
+      setBroadcastTarget(null);
+      setBroadcastNote(
+        `“${c.code}” sent to ${res.sent} of ${res.total} subscribers.`,
+      );
+    } catch (err) {
+      setBroadcastError((err as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -94,6 +113,18 @@ export default function CouponsPage() {
           <Plus size={16} /> New coupon
         </Button>
       </div>
+
+      {broadcastNote && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-good/30 bg-good/10 px-4 py-2.5 text-sm text-good">
+          <span>{broadcastNote}</span>
+          <button
+            onClick={() => setBroadcastNote("")}
+            className="text-good/70 hover:text-good"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {!coupons
@@ -117,15 +148,22 @@ export default function CouponsPage() {
                       {c.type === "PERCENT"
                         ? `${c.value}% off`
                         : `$${c.value / 100} off`}
-                      {c.minSubtotalCents
-                        ? ` · min $${c.minSubtotalCents / 100}`
-                        : ""}
                       {" · "}
                       <span className={c.isActive ? "text-good" : "text-bad"}>
                         {c.isActive ? "active" : "inactive"}
                       </span>
                     </p>
                   </div>
+                  <button
+                    onClick={() => {
+                      setBroadcastError("");
+                      setBroadcastTarget(c);
+                    }}
+                    className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
+                    title="Send to subscribers"
+                  >
+                    <Send size={15} />
+                  </button>
                   <button
                     onClick={() => openEdit(c)}
                     className="rounded-lg p-1.5 text-muted hover:bg-panel-2 hover:text-copper-light"
@@ -174,13 +212,6 @@ export default function CouponsPage() {
               required
             />
           </div>
-          <Input
-            label="Min. subtotal ($, optional)"
-            type="number"
-            step="0.01"
-            value={form.minSubtotal}
-            onChange={(e) => setForm({ ...form, minSubtotal: e.target.value })}
-          />
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -201,6 +232,37 @@ export default function CouponsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Send to subscribers confirm */}
+      <Modal
+        open={!!broadcastTarget}
+        onClose={() => setBroadcastTarget(null)}
+        title="Send to subscribers"
+      >
+        <p className="text-sm text-muted">
+          Email coupon{" "}
+          <span className="font-mono font-medium text-fg">
+            {broadcastTarget?.code}
+          </span>{" "}
+          to all newsletter subscribers? This is how the code reaches customers —
+          it is not shown publicly.
+        </p>
+        {broadcastError && (
+          <p className="mt-3 text-sm text-bad">{broadcastError}</p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setBroadcastTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={sending}
+            onClick={() => broadcastTarget && broadcast(broadcastTarget)}
+          >
+            {sending ? <Spinner /> : <Send size={15} />}
+            Send
+          </Button>
+        </div>
       </Modal>
     </div>
   );

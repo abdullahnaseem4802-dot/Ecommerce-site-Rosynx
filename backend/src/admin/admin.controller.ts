@@ -4,13 +4,11 @@ import {
   Get,
   Param,
   Patch,
-  Post,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { AdminService } from './admin.service';
 import {
-  ResetCustomerPasswordDto,
   UpdateCustomerDto,
   UpdateCustomerStatusDto,
 } from './dto/customer.dto';
@@ -44,13 +42,8 @@ export class AdminController {
     return this.admin.updateCustomer(id, dto);
   }
 
-  @Post('customers/:id/reset-password')
-  resetCustomerPassword(
-    @Param('id') id: string,
-    @Body() dto: ResetCustomerPasswordDto,
-  ) {
-    return this.admin.resetCustomerPassword(id, dto);
-  }
+  // Password reset moved to the customer-facing forgot-password flow (emailed
+  // OTP). Admins can no longer set a customer's password directly.
 
   @Patch('customers/:id/status')
   setCustomerStatus(
