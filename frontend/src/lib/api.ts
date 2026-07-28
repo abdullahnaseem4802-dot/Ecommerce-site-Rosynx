@@ -56,21 +56,41 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let code: string | undefined;
     try {
       const data = await res.json();
       message = Array.isArray(data.message)
         ? data.message.join(", ")
         : data.message || message;
+      // Some endpoints tag errors with a machine-readable code (e.g. the login
+      // 403 for an unverified customer → "EMAIL_NOT_VERIFIED"). Surface it on
+      // the thrown error so callers can branch without string-matching.
+      if (typeof data.code === "string") code = data.code;
     } catch {
       /* ignore */
     }
-    throw new Error(message);
+    const err = new Error(message) as ApiError;
+    err.status = res.status;
+    if (code) err.code = code;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return res.json();
 }
 
 // ---- shapes ----
+
+/**
+ * Error thrown by `request` on a non-2xx response. Carries the HTTP status and,
+ * when the backend provides one, a machine-readable `code` (e.g.
+ * "EMAIL_NOT_VERIFIED") so callers can branch on it. It remains a plain `Error`,
+ * so existing `(err as Error).message` callers keep working unchanged.
+ */
+export interface ApiError extends Error {
+  status?: number;
+  code?: string;
+}
+
 export interface ApiUser {
   id: string;
   name: string;
@@ -97,17 +117,32 @@ export interface ApiCart {
 
 export const api = {
   // auth
+  //
+  // Registration is now double opt-in: it never returns a session. It responds
+  // with { requiresVerification, email } for both a brand-new signup and a
+  // re-register of an unverified email (which silently resends the code). A
+  // weak password → 400; an already-verified email → 409.
   register: (name: string, email: string, password: string) =>
-    request<{ user: ApiUser; accessToken: string }>("POST", "/auth/register", {
-      name,
-      email,
-      password,
-    }),
+    request<{ requiresVerification: true; email: string }>(
+      "POST",
+      "/auth/register",
+      { name, email, password },
+    ),
   login: (email: string, password: string) =>
     request<{ user: ApiUser; accessToken: string }>("POST", "/auth/login", {
       email,
       password,
     }),
+  // Confirm the emailed code. On success this returns the same shape as login,
+  // so the caller can establish a session exactly as it would after signing in.
+  verifyEmail: (email: string, otp: string) =>
+    request<{ user: ApiUser; accessToken: string }>(
+      "POST",
+      "/auth/verify-email",
+      { email, otp },
+    ),
+  resendVerification: (email: string) =>
+    request<{ ok: true }>("POST", "/auth/resend-verification", { email }),
   me: () => request<ApiUser>("GET", "/auth/me"),
   forgotPassword: (email: string) =>
     request<{ ok: true }>("POST", "/auth/forgot-password", { email }),

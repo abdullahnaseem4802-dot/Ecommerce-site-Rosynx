@@ -73,6 +73,12 @@ model User {
   resetOtpHash     String?
   resetOtpExpiry   DateTime?
   resetOtpAttempts Int      @default(0)
+  // Signup email verification (double opt-in). Same hash/expiry/attempt shape as
+  // the reset OTP. A CUSTOMER can't log in until emailVerified flips true, which
+  // proves the address is real and reachable.
+  verifyOtpHash     String?
+  verifyOtpExpiry   DateTime?
+  verifyOtpAttempts Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -395,6 +401,9 @@ model StoreSetting {
   bankTransferEnabled     Boolean  @default(true)
   cardEnabled             Boolean  @default(false) // online gateway (sandbox)
   bankDetails             String   @default("") // shown to customer for bank transfer
+  // Coupon auto-emailed to a NEW newsletter subscriber. Empty = fall back to any
+  // currently-active valid coupon; if none exists, no coupon email is sent.
+  welcomeCouponCode       String   @default("")
   updatedAt               DateTime @updatedAt @default(now())
 
   @@map("store_settings")

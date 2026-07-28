@@ -31,22 +31,126 @@ export class AuthService {
     private readonly email: EmailService,
   ) {}
 
+  /**
+   * Step 1 of signup: create the account UNVERIFIED and email a 6-digit code.
+   * No tokens are issued yet — the caller must verify the code first. This is
+   * the only reliable way to prove the address is real and reachable (a valid
+   * domain like gmail.com passes DNS but says nothing about the mailbox).
+   *
+   * Re-registering an email that exists but was never verified just resends a
+   * fresh code (common: the user closed the tab before verifying). A verified
+   * email is a real conflict.
+   */
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
-    });
-    if (existing) throw new ConflictException('Email already registered');
+    const email = dto.email.toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+
+    if (existing) {
+      if (existing.emailVerified)
+        throw new ConflictException('Email already registered');
+      // Unverified stub — refresh its details + code and resend.
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+      await this.prisma.user.update({
+        where: { id: existing.id },
+        data: { name: dto.name, phone: dto.phone, passwordHash },
+      });
+      await this.issueVerifyOtp(existing.id, email, dto.name);
+      return { requiresVerification: true, email };
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
-        email: dto.email.toLowerCase(),
+        email,
         phone: dto.phone,
         passwordHash,
+        emailVerified: false,
       },
     });
-    return this.buildAuthResponse(user);
+    await this.issueVerifyOtp(user.id, email, dto.name);
+    return { requiresVerification: true, email };
+  }
+
+  /**
+   * Step 2 of signup: confirm the emailed code. On success the account is
+   * verified and the user is logged in (tokens returned). Throttled to 5 wrong
+   * tries, after which the code is burned and a new one must be requested.
+   */
+  async verifyEmail(email: string, otp: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    const invalid = new BadRequestException('Invalid or expired code');
+    if (!user) throw invalid;
+    if (user.emailVerified) {
+      // Idempotent: already done — just log them in.
+      return this.buildAuthResponse(user);
+    }
+    if (!user.verifyOtpHash || !user.verifyOtpExpiry) throw invalid;
+    if (user.verifyOtpExpiry < new Date()) {
+      await this.clearVerifyOtp(user.id);
+      throw new BadRequestException('Code expired — request a new one');
+    }
+    if (user.verifyOtpAttempts >= 5) {
+      await this.clearVerifyOtp(user.id);
+      throw new BadRequestException('Too many attempts — request a new code');
+    }
+    const ok = await bcrypt.compare(otp.trim(), user.verifyOtpHash);
+    if (!ok) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { verifyOtpAttempts: { increment: 1 } },
+      });
+      throw invalid;
+    }
+    const verified = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        verifyOtpHash: null,
+        verifyOtpExpiry: null,
+        verifyOtpAttempts: 0,
+      },
+    });
+    return this.buildAuthResponse(verified);
+  }
+
+  /**
+   * Resend a verification code. Always returns ok (never leaks whether the email
+   * exists or is already verified) — only actually sends for a real, unverified
+   * account.
+   */
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (user && !user.emailVerified) {
+      await this.issueVerifyOtp(user.id, user.email, user.name);
+    }
+    return { ok: true };
+  }
+
+  private async issueVerifyOtp(userId: string, email: string, name: string) {
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const verifyOtpHash = await bcrypt.hash(otp, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        verifyOtpHash,
+        verifyOtpExpiry: new Date(Date.now() + 15 * 60 * 1000),
+        verifyOtpAttempts: 0,
+      },
+    });
+    // Propagate failures so register/resend can surface "couldn't send code".
+    await this.email.verifyEmailOtp(email, name, otp);
+  }
+
+  private async clearVerifyOtp(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { verifyOtpHash: null, verifyOtpExpiry: null, verifyOtpAttempts: 0 },
+    });
   }
 
   async login(dto: LoginDto) {
@@ -56,9 +160,17 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Invalid credentials');
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
-    // Checked only after the password verifies, so it can't be used to probe
-    // which emails exist.
+    // These are checked only after the password verifies, so they can't be used
+    // to probe which emails exist.
     if (!user.isActive) throw new ForbiddenException(SUSPENDED_MESSAGE);
+    if (!user.emailVerified) {
+      // Distinct code lets the client show a "verify your email" step + resend.
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email to continue.',
+      });
+    }
     return this.buildAuthResponse(user);
   }
 

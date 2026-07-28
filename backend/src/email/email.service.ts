@@ -182,6 +182,24 @@ export class EmailService {
     });
   }
 
+  /**
+   * Emails a signup verification OTP. Failures propagate so register() can tell
+   * the user "we couldn't send your code" — the whole double-opt-in flow is
+   * pointless if the code never arrives.
+   */
+  async verifyEmailOtp(to: string, name: string, otp: string): Promise<void> {
+    await this.send({
+      to,
+      subject: 'ROSYNX — verify your email',
+      html: `
+        <h2>Welcome to ROSYNX 🎉</h2>
+        <p>Hi ${escapeHtml(name)},</p>
+        <p>Confirm your email with this code to finish creating your account:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${escapeHtml(otp)}</p>
+        <p style="color:#888">This code expires in 15 minutes. If you didn't sign up, you can ignore this email.</p>`,
+    });
+  }
+
   private async sendViaResend(msg: EmailMessage): Promise<void> {
     const key = this.config.get<string>('RESEND_API_KEY');
     const from =

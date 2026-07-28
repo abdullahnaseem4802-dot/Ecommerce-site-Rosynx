@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 const inputClass =
   "w-full rounded-xl border border-line bg-cream-soft px-4 py-3 text-sm text-coffee outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/20";
@@ -18,6 +19,13 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
+  const user = useAuth((s) => s.user);
+
+  // Prefill the logged-in user's email — only while the field is still empty,
+  // so we never clobber what the visitor has typed.
+  useEffect(() => {
+    if (user?.email) setEmail((cur) => cur || user.email);
+  }, [user]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,6 +106,7 @@ export function ContactForm() {
           <label className="mb-1.5 block text-sm font-medium text-coffee">Email</label>
           <input
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"

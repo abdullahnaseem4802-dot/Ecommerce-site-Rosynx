@@ -19,7 +19,12 @@ import { CouponBox } from "@/components/cart/coupon-box";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { Combobox } from "./Combobox";
-import { PhoneField, type DialOption } from "./PhoneField";
+import {
+  PhoneField,
+  countDigits,
+  MIN_LOCAL_DIGITS,
+  type DialOption,
+} from "./PhoneField";
 import {
   countryOptions,
   dialOptions,
@@ -30,38 +35,50 @@ import {
 type PaymentValue = "COD" | "BANK_TRANSFER" | "CARD";
 
 type Form = {
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
   address: string;
   city: string;
   state: string;
   postal: string;
   country: string;
-  phone: string;
 };
 
 const empty: Form = {
-  firstName: "",
-  lastName: "",
+  name: "",
   email: "",
   address: "",
   city: "",
   state: "",
   postal: "",
   country: "",
-  phone: "",
 };
 
 const required: (keyof Form)[] = [
-  "firstName",
-  "lastName",
+  "name",
   "email",
   "address",
   "city",
   "country",
   "postal",
 ];
+
+// Field errors carry a per-field message string. "phone" lives outside `Form`
+// (its value is composed from the dial picker + number), so it gets its own key.
+type ErrorKey = keyof Form | "phone";
+type FieldErrors = Partial<Record<ErrorKey, string>>;
+
+// Human labels used both for the per-field messages and the "Please fix: …" list.
+const FIELD_LABELS: Record<ErrorKey, string> = {
+  name: "Name",
+  email: "Email",
+  address: "Address",
+  city: "City",
+  state: "State",
+  postal: "Postal code",
+  country: "Country",
+  phone: "Phone",
+};
 
 // A pragmatic email check — stricter than "contains @", lenient enough not to
 // reject valid real-world addresses.
@@ -122,7 +139,7 @@ export default function CheckoutPage() {
   const [form, setForm] = useState<Form>(empty);
   const [payment, setPayment] = useState<PaymentValue>("COD");
   const [settings, setSettings] = useState<StoreSettings | null>(null);
-  const [errors, setErrors] = useState<Partial<Record<keyof Form, boolean>>>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
 
@@ -204,11 +221,7 @@ export default function CheckoutPage() {
       setForm((f) => {
         const next = { ...f };
         if (!f.email.trim()) next.email = user.email;
-        if (!f.firstName.trim() && !f.lastName.trim()) {
-          const [first, ...rest] = user.name.trim().split(/\s+/);
-          next.firstName = first ?? "";
-          next.lastName = rest.join(" ");
-        }
+        if (!f.name.trim()) next.name = user.name.trim();
         return next;
       });
 
@@ -294,7 +307,7 @@ export default function CheckoutPage() {
 
   const set = (k: keyof Form, v: string) => {
     setForm((f) => ({ ...f, [k]: v }));
-    if (errors[k]) setErrors((e) => ({ ...e, [k]: false }));
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
   const onCountryChange = (name: string, iso?: string) => {
@@ -302,7 +315,7 @@ export default function CheckoutPage() {
     setCountryIso(iso ?? "");
     setStateIso("");
     if (iso) setDialIso(iso); // sync phone dial code to shipping country
-    if (errors.country) setErrors((e) => ({ ...e, country: false }));
+    if (errors.country) setErrors((e) => ({ ...e, country: undefined }));
   };
 
   const onStateChange = (name: string, iso?: string) => {
@@ -312,16 +325,23 @@ export default function CheckoutPage() {
 
   const placeOrder = async () => {
     setServerError("");
-    const nextErrors: Partial<Record<keyof Form, boolean>> = {};
+    const nextErrors: FieldErrors = {};
     required.forEach((k) => {
-      if (!form[k].trim()) nextErrors[k] = true;
+      if (!form[k].trim()) nextErrors[k] = `${FIELD_LABELS[k]} is required`;
     });
-    if (!EMAIL_RE.test(form.email.trim())) nextErrors.email = true;
+    if (form.email.trim() && !EMAIL_RE.test(form.email.trim()))
+      nextErrors.email = "Enter a valid email";
+
+    const phoneDigits = countDigits(phoneNumber);
+    if (phoneDigits === 0) nextErrors.phone = "Phone number is required";
+    else if (phoneDigits < MIN_LOCAL_DIGITS)
+      nextErrors.phone = "Enter a valid phone number";
+
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     if (cart.length === 0) return;
 
-    const phone = composedPhone || "N/A";
+    const phone = composedPhone;
 
     setLoading(true);
     try {
@@ -331,7 +351,7 @@ export default function CheckoutPage() {
         couponCode: coupon?.code,
         guestToken: getGuestToken(),
         shipping: {
-          name: `${form.firstName} ${form.lastName}`.trim(),
+          name: form.name.trim(),
           phone,
           line1: form.address,
           city: form.city,
@@ -446,8 +466,7 @@ export default function CheckoutPage() {
                 </div>
               )}
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input label="First name" value={form.firstName} onChange={(v) => set("firstName", v)} error={errors.firstName} />
-                <Input label="Last name" value={form.lastName} onChange={(v) => set("lastName", v)} error={errors.lastName} />
+                <Input label="Full name" value={form.name} onChange={(v) => set("name", v)} error={errors.name} className="sm:col-span-2" />
                 <Input label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} error={errors.email} className="sm:col-span-2" />
                 <Input label="Address" value={form.address} onChange={(v) => set("address", v)} error={errors.address} className="sm:col-span-2" />
                 <Combobox
@@ -456,7 +475,7 @@ export default function CheckoutPage() {
                   value={form.country}
                   onChange={(name, o) => onCountryChange(name, o?.value)}
                   placeholder="Select country"
-                  error={errors.country}
+                  error={Boolean(errors.country)}
                 />
                 {states.length > 0 ? (
                   <Combobox
@@ -466,7 +485,7 @@ export default function CheckoutPage() {
                     onChange={(name, o) => onStateChange(name, o?.value)}
                     placeholder="Select state"
                     disabled={!countryIso}
-                    error={errors.state}
+                    error={Boolean(errors.state)}
                   />
                 ) : (
                   <Input
@@ -482,7 +501,7 @@ export default function CheckoutPage() {
                     value={form.city}
                     onChange={(name) => set("city", name)}
                     placeholder="Select city"
-                    error={errors.city}
+                    error={Boolean(errors.city)}
                     allowFreeText
                   />
                 ) : (
@@ -500,7 +519,11 @@ export default function CheckoutPage() {
                   isoCode={dialIso}
                   number={phoneNumber}
                   onIsoChange={setDialIso}
-                  onNumberChange={setPhoneNumber}
+                  onNumberChange={(v) => {
+                    setPhoneNumber(v);
+                    if (errors.phone) setErrors((e) => ({ ...e, phone: undefined }));
+                  }}
+                  error={errors.phone}
                   className="sm:col-span-2"
                 />
               </div>
@@ -617,11 +640,17 @@ export default function CheckoutPage() {
                 </>
               )}
             </button>
-            {Object.keys(errors).length > 0 && (
-              <p className="mt-2 text-center text-xs text-sale">
-                Please fill in the required fields above.
-              </p>
-            )}
+            {(() => {
+              const missing = (Object.keys(errors) as ErrorKey[]).filter(
+                (k) => errors[k],
+              );
+              if (missing.length === 0) return null;
+              return (
+                <p className="mt-2 text-center text-xs text-sale">
+                  Please fix: {missing.map((k) => FIELD_LABELS[k]).join(", ")}
+                </p>
+              );
+            })()}
             {serverError && (
               <p className="mt-2 text-center text-xs text-sale">{serverError}</p>
             )}
@@ -657,8 +686,10 @@ function Input({
   onChange: (v: string) => void;
   type?: string;
   className?: string;
-  error?: boolean;
+  error?: boolean | string;
 }) {
+  const hasError = Boolean(error);
+  const errorMsg = typeof error === "string" ? error : "";
   return (
     <div className={className}>
       <label className="mb-1.5 block text-sm font-medium text-coffee">{label}</label>
@@ -668,9 +699,10 @@ function Input({
         onChange={(e) => onChange(e.target.value)}
         className={cn(
           "w-full rounded-xl border bg-cream-soft px-4 py-2.5 text-sm focus:outline-none",
-          error ? "border-sale focus:border-sale" : "border-line focus:border-brand",
+          hasError ? "border-sale focus:border-sale" : "border-line focus:border-brand",
         )}
       />
+      {errorMsg && <p className="mt-1.5 text-xs text-sale">{errorMsg}</p>}
     </div>
   );
 }

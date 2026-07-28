@@ -3,10 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, Package, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Heart, MailCheck, Package, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useCartCount, useHydrated, useShop } from "@/lib/store";
-import { api, type OrderSummary } from "@/lib/api";
+import {
+  api,
+  setToken,
+  type ApiError,
+  type ApiUser,
+  type OrderSummary,
+} from "@/lib/api";
+import { takePendingAdd } from "@/lib/cart-intent";
+import { toast } from "@/lib/toast";
 import { Container } from "@/components/ui/container";
 import { PageBanner } from "@/components/ui/page-banner";
 import { AccountShell } from "@/components/account/account-shell";
@@ -136,10 +144,12 @@ export function StatusPill({ status }: { status: string }) {
 // Stricter than "contains @" but lenient enough for real addresses.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Mirror the backend rule so users don't round-trip to discover a weak password.
+const PASSWORD_RE = /(?=.*[A-Za-z])(?=.*\d)/;
+
 function AuthForm() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const login = useAuth((s) => s.login);
-  const register = useAuth((s) => s.register);
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -147,6 +157,22 @@ function AuthForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [redirect, setRedirect] = useState<string | null>(null);
+
+  // Which fields the user has interacted with — errors only surface after a
+  // blur (or once there's content), never on a pristine field.
+  const [touched, setTouched] = useState({
+    name: false,
+    email: false,
+    password: false,
+  });
+
+  // Email-verification step (shared by the register flow and the login-of-an-
+  // unverified-account flow).
+  const [step, setStep] = useState<"form" | "verify">("form");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [verifyNote, setVerifyNote] = useState("");
+  const [cooldown, setCooldown] = useState(0);
 
   // Read ?redirect= from the URL after mount rather than via useSearchParams,
   // which would force a Suspense boundary / CSR bailout on this route.
@@ -157,21 +183,107 @@ function AuthForm() {
     if (r && r.startsWith("/") && !r.startsWith("//")) setRedirect(r);
   }, []);
 
+  // Tick down the resend cooldown, one second at a time.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const emailValid = EMAIL_RE.test(email.trim());
+  const passwordValid = password.length >= 8 && PASSWORD_RE.test(password);
+  const nameValid = name.trim().length >= 2;
+
+  const emailError = touched.email && !emailValid ? "Enter a valid email address" : "";
+  const nameError =
+    mode === "register" && touched.name && !nameValid
+      ? "Please enter your name (at least 2 characters)"
+      : "";
+  const passwordError =
+    mode === "register" && touched.password && !passwordValid
+      ? "Password must be at least 8 characters and include a letter and a number"
+      : "";
+
+  const canSubmit =
+    mode === "register"
+      ? nameValid && emailValid && passwordValid
+      : emailValid && password.length > 0;
+
+  // Establish a session from a login-shaped response — the exact steps the auth
+  // store runs after a normal sign-in (token, user, guest-cart merge, then flush
+  // whatever the visitor was trying to add when the login gate stopped them).
+  const establishSession = async (res: {
+    user: ApiUser;
+    accessToken: string;
+  }) => {
+    setToken(res.accessToken);
+    useAuth.setState({ user: res.user });
+    await useShop.getState().mergeGuestCart();
+    const pending = takePendingAdd();
+    if (pending) {
+      try {
+        await api.addToCart(pending.apiId, pending.qty);
+        await useShop.getState().hydrate();
+      } catch {
+        /* the visitor is signed in either way — they can add it again */
+      }
+    }
+  };
+
+  const openVerifyStep = (forEmail: string, note: string) => {
+    setPendingEmail(forEmail);
+    setVerifyNote(note);
+    setOtp("");
+    setError("");
+    setStep("verify");
+    setCooldown(60);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!EMAIL_RE.test(email.trim()) || password.length < 8) {
-      setError("Enter a valid email and a password of at least 8 characters.");
-      return;
+    setTouched({ name: true, email: true, password: true });
+    if (!canSubmit) return;
+    setLoading(true);
+    try {
+      if (mode === "register") {
+        // No longer auto-logs in — the backend sent a code and we collect it.
+        await api.register(name.trim(), email.trim(), password);
+        openVerifyStep(email.trim(), `Enter the 6-digit code we sent to ${email.trim()}.`);
+      } else {
+        await login(email.trim(), password);
+        if (redirect) router.push(redirect);
+      }
+    } catch (err) {
+      const e2 = err as ApiError;
+      if (mode === "login" && e2.code === "EMAIL_NOT_VERIFIED") {
+        // Unverified customer: move them into the verify step and send a fresh
+        // code rather than showing a dead-end error.
+        openVerifyStep(email.trim(), `We sent a code to ${email.trim()}.`);
+        try {
+          await api.resendVerification(email.trim());
+        } catch {
+          /* the "resend" control below lets them try again */
+        }
+      } else {
+        setError(e2.message);
+      }
+    } finally {
+      setLoading(false);
     }
-    if (mode === "register" && name.trim().length < 2) {
-      setError("Please enter your name.");
+  };
+
+  const submitVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!/^\d{6}$/.test(otp)) {
+      setError("Enter the 6-digit code from your email.");
       return;
     }
     setLoading(true);
     try {
-      if (mode === "register") await register(name.trim(), email, password);
-      else await login(email, password);
+      const res = await api.verifyEmail(pendingEmail, otp);
+      await establishSession(res);
       if (redirect) router.push(redirect);
     } catch (err) {
       setError((err as Error).message);
@@ -180,71 +292,177 @@ function AuthForm() {
     }
   };
 
+  const resend = async () => {
+    if (cooldown > 0) return;
+    setError("");
+    try {
+      await api.resendVerification(pendingEmail);
+      toast.info(`A new code was sent to ${pendingEmail}.`);
+    } catch {
+      /* the endpoint always reports ok; keep the UX moving regardless */
+    }
+    setCooldown(60);
+  };
+
+  const backToForm = () => {
+    setStep("form");
+    setOtp("");
+    setError("");
+  };
+
   return (
     <div className="pb-20">
       <PageBanner title="My Account" crumb="Account" />
       <Container>
         <div className="mx-auto max-w-md rounded-2xl border border-line/60 bg-white p-8">
-          {redirect && (
-            <p className="mb-5 rounded-xl bg-cream-card px-4 py-3 text-center text-sm text-coffee">
-              Please sign in or create an account to continue shopping. We&apos;ll
-              take you straight back.
-            </p>
-          )}
-          <div className="mb-6 flex rounded-full bg-cream-card p-1">
-            {(["login", "register"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMode(m);
-                  setError("");
-                }}
-                className={cn(
-                  "flex-1 rounded-full py-2 text-sm font-semibold capitalize transition",
-                  mode === m ? "bg-brand text-white" : "text-coffee",
+          {step === "verify" ? (
+            <>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-cream-card text-brand">
+                <MailCheck className="h-5 w-5" />
+              </span>
+              <h2 className="mt-4 font-serif text-xl font-bold text-espresso">
+                Verify your email
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {verifyNote || (
+                  <>
+                    We sent a 6-digit code to{" "}
+                    <span className="font-medium text-coffee">{pendingEmail}</span>.
+                  </>
                 )}
-              >
-                {m === "login" ? "Sign In" : "Register"}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={submit} className="space-y-4">
-            {mode === "register" && (
-              <Field label="Full name" value={name} onChange={setName} placeholder="Jane Doe" />
-            )}
-            <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="you@email.com" />
-            <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" />
-
-            {mode === "login" && (
-              <div className="text-right">
-                <Link
-                  href="/account/reset"
-                  className="text-xs font-medium text-brand hover:underline"
+              </p>
+              <form onSubmit={submitVerify} className="mt-6 space-y-4">
+                <Field
+                  label="6-digit code"
+                  value={otp}
+                  onChange={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
+                  inputMode="numeric"
+                />
+                {error && <p className="text-sm text-sale">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-70"
                 >
-                  Forgot password?
-                </Link>
+                  {loading ? "Verifying…" : "Verify"}
+                </button>
+                <p className="text-center text-xs text-muted">
+                  Didn&apos;t get the code?{" "}
+                  {cooldown > 0 ? (
+                    <span>Resend in {cooldown}s</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={resend}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      Resend code
+                    </button>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  onClick={backToForm}
+                  className="flex w-full items-center justify-center gap-1.5 text-xs font-medium text-muted transition hover:text-brand"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              {redirect && (
+                <p className="mb-5 rounded-xl bg-cream-card px-4 py-3 text-center text-sm text-coffee">
+                  Please sign in or create an account to continue shopping.
+                  We&apos;ll take you straight back.
+                </p>
+              )}
+              <div className="mb-6 flex rounded-full bg-cream-card p-1">
+                {(["login", "register"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      setMode(m);
+                      setError("");
+                      setTouched({ name: false, email: false, password: false });
+                    }}
+                    className={cn(
+                      "flex-1 rounded-full py-2 text-sm font-semibold capitalize transition",
+                      mode === m ? "bg-brand text-white" : "text-coffee",
+                    )}
+                  >
+                    {m === "login" ? "Sign In" : "Register"}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {error && <p className="text-sm text-sale">{error}</p>}
+              <form onSubmit={submit} className="space-y-4">
+                {mode === "register" && (
+                  <Field
+                    label="Full name"
+                    value={name}
+                    onChange={setName}
+                    onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                    placeholder="Jane Doe"
+                    error={nameError}
+                  />
+                )}
+                <Field
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                  onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                  placeholder="you@email.com"
+                  error={emailError}
+                />
+                <Field
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={setPassword}
+                  onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                  placeholder="••••••••"
+                  error={passwordError}
+                  hint={
+                    mode === "register"
+                      ? "At least 8 characters, including a letter and a number."
+                      : undefined
+                  }
+                />
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-70"
-            >
-              {loading
-                ? "Please wait…"
-                : mode === "login"
-                  ? "Sign In"
-                  : "Create Account"}
-            </button>
-          </form>
+                {mode === "login" && (
+                  <div className="text-right">
+                    <Link
+                      href="/account/reset"
+                      className="text-xs font-medium text-brand hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                )}
 
-          <p className="mt-4 text-center text-xs text-muted">
-            Secure sign-in · your account syncs your cart, wishlist and orders.
-          </p>
+                {error && <p className="text-sm text-sale">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={loading || !canSubmit}
+                  className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-70"
+                >
+                  {loading
+                    ? "Please wait…"
+                    : mode === "login"
+                      ? "Sign In"
+                      : "Create Account"}
+                </button>
+              </form>
+
+              <p className="mt-4 text-center text-xs text-muted">
+                Secure sign-in · your account syncs your cart, wishlist and orders.
+              </p>
+            </>
+          )}
         </div>
       </Container>
     </div>
@@ -255,25 +473,43 @@ function Field({
   label,
   value,
   onChange,
+  onBlur,
   type = "text",
   placeholder,
+  inputMode,
+  error,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   type?: string;
   placeholder?: string;
+  inputMode?: "numeric" | "text";
+  error?: string;
+  hint?: string;
 }) {
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-coffee">{label}</label>
       <input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-line bg-cream-soft px-4 py-3 text-sm focus:border-brand focus:outline-none"
+        className={cn(
+          "w-full rounded-xl border bg-cream-soft px-4 py-3 text-sm focus:outline-none",
+          error ? "border-sale focus:border-sale" : "border-line focus:border-brand",
+        )}
       />
+      {error ? (
+        <p className="mt-1.5 text-xs text-sale">{error}</p>
+      ) : hint ? (
+        <p className="mt-1.5 text-xs text-muted">{hint}</p>
+      ) : null}
     </div>
   );
 }

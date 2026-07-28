@@ -1,11 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
-import {
-  FacebookIcon,
-  InstagramIcon,
-  XIcon,
-} from "@/components/brand/social-icons";
 import { FooterSubscribe } from "./footer-subscribe";
 
 const columns = [
@@ -38,8 +33,6 @@ const columns = [
     ],
   },
 ];
-
-const socials = [InstagramIcon, FacebookIcon, XIcon];
 
 export function SiteFooter() {
   return (
@@ -111,20 +104,8 @@ export function SiteFooter() {
 
       {/* Bottom */}
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 px-4 py-4 text-xs text-cream/60 sm:flex-row sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-center px-4 py-4 text-xs text-cream/60 sm:px-6 lg:px-10">
           <p>© {new Date().getFullYear()} ROSYNX. All rights reserved.</p>
-          <div className="flex items-center gap-3">
-            {socials.map((Icon, i) => (
-              <Link
-                key={i}
-                href="#"
-                aria-label="Social link"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 transition hover:border-brand-light hover:text-brand-light"
-              >
-                <Icon className="h-4 w-4" />
-              </Link>
-            ))}
-          </div>
         </div>
       </div>
     </footer>

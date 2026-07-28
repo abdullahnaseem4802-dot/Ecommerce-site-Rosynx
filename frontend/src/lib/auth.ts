@@ -49,11 +49,11 @@ export const useAuth = create<AuthState>()((set) => ({
     await afterAuth();
   },
 
+  // Registration is now double opt-in and no longer returns a session — the
+  // account page drives the email-verification step and establishes the session
+  // once the code is confirmed. This just kicks off registration.
   register: async (name, email, password) => {
-    const res = await api.register(name, email, password);
-    setToken(res.accessToken);
-    set({ user: res.user });
-    await afterAuth();
+    await api.register(name, email, password);
   },
 
   logout: () => {

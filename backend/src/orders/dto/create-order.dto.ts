@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Min,
   MinLength,
   ValidateNested,
@@ -26,7 +27,11 @@ export class AddressDto {
   @MinLength(2)
   name: string;
 
+  // E.164-ish: optional +, then 7–15 digits (spaces/dashes/parens tolerated in
+  // the raw string; the client sends "+92 300…"). Rejects the 20-digit garbage
+  // the old validator let through.
   @IsString()
+  @Matches(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Enter a valid phone number' })
   phone: string;
 
   @IsString()

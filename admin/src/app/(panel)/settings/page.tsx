@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Lock, Store, User } from "lucide-react";
-import { api, StoreSettings } from "@/lib/api";
+import { api, Coupon, StoreSettings } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button, Card, Input, Spinner } from "@/components/ui";
 
@@ -23,6 +23,7 @@ interface StoreForm {
   bankTransferEnabled: boolean;
   cardEnabled: boolean;
   bankDetails: string;
+  welcomeCouponCode: string;
 }
 
 function Toggle({
@@ -56,6 +57,7 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const [store, setStore] = useState<StoreForm | null>(null);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [savingStore, setSavingStore] = useState(false);
   const [storeMsg, setStoreMsg] = useState<{ ok: boolean; text: string } | null>(
     null,
@@ -77,8 +79,13 @@ export default function SettingsPage() {
         bankTransferEnabled: s.bankTransferEnabled,
         cardEnabled: s.cardEnabled,
         bankDetails: s.bankDetails ?? "",
+        welcomeCouponCode: s.welcomeCouponCode ?? "",
       }),
     );
+    api
+      .get<Coupon[]>("/coupons")
+      .then(setCoupons)
+      .catch(() => setCoupons([]));
   }, []);
 
   async function changePassword(e: React.FormEvent) {
@@ -125,6 +132,7 @@ export default function SettingsPage() {
         bankTransferEnabled: store.bankTransferEnabled,
         cardEnabled: store.cardEnabled,
         bankDetails: store.bankDetails || undefined,
+        welcomeCouponCode: store.welcomeCouponCode,
       });
       setStoreMsg({ ok: true, text: "Store settings saved." });
     } catch (err) {
@@ -331,6 +339,39 @@ export default function SettingsPage() {
                     rows={3}
                     className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-copper focus:ring-2 focus:ring-copper/20"
                   />
+                </label>
+              </div>
+
+              <div className="border-t border-line pt-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Newsletter
+                </p>
+                <label className="block sm:max-w-sm">
+                  <span className="mb-1.5 block text-xs font-medium text-muted">
+                    Welcome coupon
+                  </span>
+                  <select
+                    value={store.welcomeCouponCode}
+                    onChange={(e) => up("welcomeCouponCode", e.target.value)}
+                    className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm outline-none focus:border-copper"
+                  >
+                    <option value="">— Any active coupon —</option>
+                    {store.welcomeCouponCode &&
+                      !coupons.some((c) => c.code === store.welcomeCouponCode) && (
+                        <option value={store.welcomeCouponCode}>
+                          {store.welcomeCouponCode}
+                        </option>
+                      )}
+                    {coupons.map((c) => (
+                      <option key={c.id} value={c.code}>
+                        {c.code}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1.5 block text-xs text-muted">
+                    Emailed to new newsletter subscribers. Leave as &ldquo;Any
+                    active coupon&rdquo; to auto-pick.
+                  </span>
                 </label>
               </div>
 

@@ -8,13 +8,15 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { IsRealEmail } from '../../auth/validators/is-real-email.validator';
 
 export class CreateContactDto {
   @IsString()
   @MinLength(2)
   name: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'Enter a valid email address' })
+  @IsRealEmail()
   email: string;
 
   @IsOptional()

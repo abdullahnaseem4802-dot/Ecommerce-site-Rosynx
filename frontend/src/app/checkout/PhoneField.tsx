@@ -12,6 +12,31 @@ export type DialOption = {
 };
 
 /**
+ * Max number of *local* digits (national number, dial code excluded) we let a
+ * customer type per country. Prevents 20-digit garbage while still fitting real
+ * numbers. Anything not listed falls back to DEFAULT_MAX_DIGITS.
+ */
+const MAX_LOCAL_DIGITS: Record<string, number> = {
+  PK: 10,
+  US: 10,
+  GB: 10,
+  IN: 10,
+  AE: 9,
+  SA: 9,
+  CA: 10,
+  AU: 9,
+};
+const DEFAULT_MAX_DIGITS = 15;
+export const MIN_LOCAL_DIGITS = 7;
+
+/** How many bare digits the given country's local number may contain. */
+export const maxLocalDigits = (iso: string) =>
+  MAX_LOCAL_DIGITS[iso] ?? DEFAULT_MAX_DIGITS;
+
+/** Count of bare digits in a (possibly formatted) phone string. */
+export const countDigits = (v: string) => (v.match(/\d/g) ?? []).length;
+
+/**
  * Phone input: a country dial-code picker (flag + +code, searchable by
  * country name or dial code) next to a phone-number text input.
  */
@@ -31,9 +56,22 @@ export function PhoneField({
   number: string;
   onIsoChange: (iso: string) => void;
   onNumberChange: (v: string) => void;
-  error?: boolean;
+  /** true/false toggles the red border; a string also renders a message below. */
+  error?: boolean | string;
   className?: string;
 }) {
+  const hasError = Boolean(error);
+  const errorMsg = typeof error === "string" ? error : "";
+  const cap = maxLocalDigits(isoCode);
+
+  // Block typing past the per-country digit cap. Formatting chars (spaces,
+  // dashes) stay allowed — only the raw digit count is capped.
+  const handleNumber = (next: string) => {
+    if (countDigits(next) > cap && countDigits(next) > countDigits(number)) {
+      return;
+    }
+    onNumberChange(next);
+  };
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
@@ -82,8 +120,8 @@ export function PhoneField({
           aria-expanded={open}
           className={cn(
             "flex shrink-0 items-center gap-1.5 rounded-l-xl border border-r-0 bg-cream-soft px-3 py-2.5 text-sm focus:outline-none",
-            error ? "border-sale" : "border-line",
-            open && !error && "border-brand",
+            hasError ? "border-sale" : "border-line",
+            open && !hasError && "border-brand",
           )}
         >
           <span className="text-base leading-none">{selected?.flag}</span>
@@ -96,11 +134,11 @@ export function PhoneField({
           type="tel"
           inputMode="tel"
           value={number}
-          onChange={(e) => onNumberChange(e.target.value)}
+          onChange={(e) => handleNumber(e.target.value)}
           placeholder="Phone number"
           className={cn(
             "w-full rounded-r-xl border bg-cream-soft px-4 py-2.5 text-sm focus:outline-none",
-            error ? "border-sale focus:border-sale" : "border-line focus:border-brand",
+            hasError ? "border-sale focus:border-sale" : "border-line focus:border-brand",
           )}
         />
 
@@ -145,6 +183,7 @@ export function PhoneField({
           </div>
         )}
       </div>
+      {errorMsg && <p className="mt-1.5 text-xs text-sale">{errorMsg}</p>}
     </div>
   );
 }

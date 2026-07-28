@@ -284,6 +284,7 @@ export interface StoreSettings {
   bankTransferEnabled: boolean;
   cardEnabled: boolean;
   bankDetails: string;
+  welcomeCouponCode: string;
 }
 
 export type TicketStatus = "OPEN" | "ANSWERED" | "CLOSED";

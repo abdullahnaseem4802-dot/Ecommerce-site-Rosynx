@@ -54,4 +54,9 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   bankDetails?: string;
+
+  // Coupon code auto-emailed to new subscribers (empty = any active coupon).
+  @IsOptional()
+  @IsString()
+  welcomeCouponCode?: string;
 }

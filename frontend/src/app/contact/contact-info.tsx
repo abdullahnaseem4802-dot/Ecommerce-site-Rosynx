@@ -1,19 +1,8 @@
 "use client";
 
 import { Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
-import {
-  FacebookIcon,
-  InstagramIcon,
-  XIcon,
-} from "@/components/brand/social-icons";
 import { businessHours } from "@/lib/content";
 import { useSettings, whatsappDigits } from "@/lib/use-settings";
-
-const socials = [
-  { label: "Instagram", href: "https://instagram.com", Icon: InstagramIcon },
-  { label: "Facebook", href: "https://facebook.com", Icon: FacebookIcon },
-  { label: "X", href: "https://x.com", Icon: XIcon },
-];
 
 /* Sensible fallbacks used only until live store settings load. */
 const FALLBACK = {
@@ -119,35 +108,18 @@ export function ContactInfo() {
         </p>
       </div>
 
-      {/* WhatsApp + socials */}
-      <div className="space-y-4">
-        {whatsapp && (
-          <a
-            href={`https://wa.me/${whatsapp}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Chat on WhatsApp
-          </a>
-        )}
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted">Follow us</span>
-          {socials.map(({ label, href, Icon }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={label}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-coffee transition hover:border-brand hover:bg-brand hover:text-white"
-            >
-              <Icon className="h-4 w-4" />
-            </a>
-          ))}
-        </div>
-      </div>
+      {/* WhatsApp */}
+      {whatsapp && (
+        <a
+          href={`https://wa.me/${whatsapp}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
+        >
+          <MessageCircle className="h-4 w-4" />
+          Chat on WhatsApp
+        </a>
+      )}
     </div>
   );
 }

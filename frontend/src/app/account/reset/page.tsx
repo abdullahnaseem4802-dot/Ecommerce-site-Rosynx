@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, MailCheck } from "lucide-react";
@@ -21,6 +21,32 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Timers: `sentAt` anchors the 60s resend cooldown; `expiresAt` anchors the
+  // 15-minute validity of the code. `now` ticks every second while on the code
+  // step so both countdowns render live.
+  const [sentAt, setSentAt] = useState(0);
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    if (step !== "otp") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [step]);
+
+  const cooldownLeft = Math.max(0, 60 - Math.floor((now - sentAt) / 1000));
+  const validityLeft = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+  const mmss = `${String(Math.floor(validityLeft / 60)).padStart(2, "0")}:${String(
+    validityLeft % 60,
+  ).padStart(2, "0")}`;
+
+  const markSent = () => {
+    const t = Date.now();
+    setSentAt(t);
+    setExpiresAt(t + 15 * 60 * 1000); // OTP valid 15 min
+    setNow(t);
+  };
+
   const requestCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -33,14 +59,28 @@ export default function ResetPasswordPage() {
       // The endpoint always returns { ok: true } and never reveals whether the
       // email exists, so we always advance to the code step.
       await api.forgotPassword(email.trim());
+      markSent();
       setStep("otp");
       toast.info("If that email exists, a 6-digit code was sent.");
     } catch {
       // Even on an unexpected failure, keep the flow moving without leaking info.
+      markSent();
       setStep("otp");
     } finally {
       setLoading(false);
     }
+  };
+
+  const resendCode = async () => {
+    if (cooldownLeft > 0) return;
+    setError("");
+    try {
+      await api.forgotPassword(email.trim());
+      toast.info("A new code was sent.");
+    } catch {
+      /* endpoint never reveals existence — keep the UX moving regardless */
+    }
+    markSent();
   };
 
   const submitReset = async (e: React.FormEvent) => {
@@ -111,6 +151,16 @@ export default function ResetPasswordPage() {
                 <span className="font-medium text-coffee">{email.trim()}</span>,
                 a 6-digit code was sent. Enter it below with your new password.
               </p>
+              <div className="mt-4 rounded-xl bg-cream-card px-4 py-3 text-xs text-coffee">
+                Code sent — valid for 15 minutes.{" "}
+                {validityLeft > 0 ? (
+                  <span className="font-medium">Expires in {mmss}.</span>
+                ) : (
+                  <span className="font-medium text-sale">
+                    Code expired — request a new one.
+                  </span>
+                )}
+              </div>
               <form onSubmit={submitReset} className="mt-6 space-y-4">
                 <Field
                   label="6-digit code"
@@ -134,6 +184,20 @@ export default function ResetPasswordPage() {
                 >
                   {loading ? "Please wait…" : "Reset password"}
                 </button>
+                <p className="text-center text-xs text-muted">
+                  Didn&apos;t get the code?{" "}
+                  {cooldownLeft > 0 ? (
+                    <span>Resend in {cooldownLeft}s</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={resendCode}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      Resend code
+                    </button>
+                  )}
+                </p>
                 <button
                   type="button"
                   onClick={() => {
