@@ -51,16 +51,24 @@ export class EmailService {
     const lines = order.items
       .map((i) => `<li>${i.qty} × ${i.nameSnapshot}</li>`)
       .join('');
-    await this.send({
-      to: order.email,
-      subject: `ROSYNX — Order ${order.orderNumber} confirmed`,
-      html: `
+    // Best-effort: a mail failure must never fail a placed order.
+    try {
+      await this.send({
+        to: order.email,
+        subject: `ROSYNX — Order ${order.orderNumber} confirmed`,
+        html: `
         <h2>Thank you for your order!</h2>
         <p>Order <strong>${order.orderNumber}</strong></p>
         <ul>${lines}</ul>
         <p>Total: <strong>${order.currency} ${(order.totalCents / 100).toFixed(2)}</strong></p>
         <p>We'll email you again when it ships.</p>`,
-    });
+      });
+    } catch (e) {
+      this.logger.error(
+        `orderConfirmation email to ${order.email} failed (order is placed)`,
+        e as Error,
+      );
+    }
   }
 
   async contactNotification(msg: {
@@ -71,15 +79,24 @@ export class EmailService {
   }) {
     const support =
       this.config.get<string>('SUPPORT_EMAIL') ?? 'support@rosynx.com';
-    await this.send({
-      to: support,
-      subject: `ROSYNX — New contact message${msg.subject ? `: ${msg.subject}` : ''}`,
-      html: `
+    // Best-effort: the message is already saved as a ticket; a mail failure must
+    // never fail the customer's contact-form submission.
+    try {
+      await this.send({
+        to: support,
+        subject: `ROSYNX — New contact message${msg.subject ? `: ${msg.subject}` : ''}`,
+        html: `
         <h2>New contact message</h2>
         <p><strong>From:</strong> ${escapeHtml(msg.name)} (${escapeHtml(msg.email)})</p>
         ${msg.subject ? `<p><strong>Subject:</strong> ${escapeHtml(msg.subject)}</p>` : ''}
         <p>${escapeHtml(msg.message)}</p>`,
-    });
+      });
+    } catch (e) {
+      this.logger.error(
+        `contactNotification email failed (ticket is saved)`,
+        e as Error,
+      );
+    }
   }
 
   /**
@@ -204,18 +221,21 @@ export class EmailService {
     const key = this.config.get<string>('RESEND_API_KEY');
     const from =
       this.config.get<string>('EMAIL_FROM') ?? 'ROSYNX <onboarding@resend.dev>';
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ from, to: msg.to, subject: msg.subject, html: msg.html }),
-      });
-      if (!res.ok) this.logger.error(`Resend failed: ${res.status}`);
-    } catch (e) {
-      this.logger.error('Resend error', e as Error);
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, to: msg.to, subject: msg.subject, html: msg.html }),
+    });
+    if (!res.ok) {
+      // Surface the real reason (e.g. "domain is not verified", "you can only
+      // send to your own address in test mode") so failures aren't silent. The
+      // OTP/verify paths let this propagate; best-effort callers catch it.
+      const body = await res.text().catch(() => '');
+      this.logger.error(`Resend send failed (${res.status}) to ${msg.to}: ${body}`);
+      throw new Error(`Email send failed (${res.status})`);
     }
   }
 }

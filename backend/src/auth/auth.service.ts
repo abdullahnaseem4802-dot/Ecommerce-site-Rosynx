@@ -54,7 +54,7 @@ export class AuthService {
         where: { id: existing.id },
         data: { name: dto.name, phone: dto.phone, passwordHash },
       });
-      await this.issueVerifyOtp(existing.id, email, dto.name);
+      await this.sendVerifyOrFail(existing.id, email, dto.name);
       return { requiresVerification: true, email };
     }
 
@@ -68,8 +68,20 @@ export class AuthService {
         emailVerified: false,
       },
     });
-    await this.issueVerifyOtp(user.id, email, dto.name);
+    await this.sendVerifyOrFail(user.id, email, dto.name);
     return { requiresVerification: true, email };
+  }
+
+  /** Issue the verify OTP, turning a mail-transport failure into a clean 503. */
+  private async sendVerifyOrFail(userId: string, email: string, name: string) {
+    try {
+      await this.issueVerifyOtp(userId, email, name);
+    } catch (e) {
+      this.logger.error(`verify OTP email to ${email} failed`, e as Error);
+      throw new ServiceUnavailableException(
+        "We couldn't send your verification email. Please try again in a moment.",
+      );
+    }
   }
 
   /**
@@ -126,7 +138,11 @@ export class AuthService {
       where: { email: email.trim().toLowerCase() },
     });
     if (user && !user.emailVerified) {
-      await this.issueVerifyOtp(user.id, user.email, user.name);
+      try {
+        await this.issueVerifyOtp(user.id, user.email, user.name);
+      } catch (e) {
+        this.logger.error(`resend verify OTP to ${user.email} failed`, e as Error);
+      }
     }
     return { ok: true };
   }
