@@ -34,6 +34,16 @@ export class EmailService {
 
   async send(msg: EmailMessage): Promise<void> {
     const provider = this.config.get<string>('EMAIL_PROVIDER') ?? 'console';
+    // Gmail / any SMTP: sends to ANY recipient, free, no domain needed. Best for
+    // a startup that hasn't bought a domain yet (Resend refuses non-owner
+    // recipients until a domain is verified).
+    if (
+      (provider === 'gmail' || provider === 'smtp') &&
+      this.config.get('SMTP_USER') &&
+      this.config.get('SMTP_PASS')
+    ) {
+      return this.sendViaSmtp(msg);
+    }
     if (provider === 'resend' && this.config.get('RESEND_API_KEY')) {
       return this.sendViaResend(msg);
     }
@@ -215,6 +225,51 @@ export class EmailService {
         <p style="font-size:28px;font-weight:700;letter-spacing:6px">${escapeHtml(otp)}</p>
         <p style="color:#888">This code expires in 15 minutes. If you didn't sign up, you can ignore this email.</p>`,
     });
+  }
+
+  // Cached SMTP transporter (nodemailer). Created lazily on first send.
+  private smtpTransport: import('nodemailer').Transporter | null = null;
+
+  /**
+   * Send via SMTP (Gmail by default). Free and delivers to ANY recipient with no
+   * domain purchase — the from-address is a real Gmail so Google signs it.
+   *
+   * Setup: EMAIL_PROVIDER=gmail, SMTP_USER=you@gmail.com,
+   * SMTP_PASS=<16-char App Password> (Google account → 2-Step Verification →
+   * App passwords), EMAIL_FROM="ROSYNX <you@gmail.com>".
+   * For a non-Gmail SMTP host, also set SMTP_HOST + SMTP_PORT.
+   */
+  private async sendViaSmtp(msg: EmailMessage): Promise<void> {
+    if (!this.smtpTransport) {
+      const nodemailer = await import('nodemailer');
+      const host = this.config.get<string>('SMTP_HOST') ?? 'smtp.gmail.com';
+      const port = Number(this.config.get<string>('SMTP_PORT') ?? 465);
+      this.smtpTransport = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465, // 465 = implicit TLS; 587 = STARTTLS
+        auth: {
+          user: this.config.get<string>('SMTP_USER'),
+          pass: this.config.get<string>('SMTP_PASS'),
+        },
+      });
+    }
+    const from =
+      this.config.get<string>('EMAIL_FROM') ??
+      `ROSYNX <${this.config.get<string>('SMTP_USER')}>`;
+    try {
+      await this.smtpTransport.sendMail({
+        from,
+        to: msg.to,
+        subject: msg.subject,
+        html: msg.html,
+      });
+    } catch (e) {
+      // Surface the real reason (bad App Password, blocked login, quota) so the
+      // OTP/verify paths can propagate it; best-effort callers catch it.
+      this.logger.error(`SMTP send failed to ${msg.to}`, e as Error);
+      throw new Error('Email send failed (SMTP)');
+    }
   }
 
   private async sendViaResend(msg: EmailMessage): Promise<void> {
