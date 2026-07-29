@@ -268,7 +268,7 @@ export class EmailService {
       // Surface the real reason (bad App Password, blocked login, quota) so the
       // OTP/verify paths can propagate it; best-effort callers catch it.
       this.logger.error(`SMTP send failed to ${msg.to}`, e as Error);
-      throw new Error('Email send failed (SMTP)');
+      throw new Error(`SMTP: ${(e as Error)?.message ?? e}`);
     }
   }
 
