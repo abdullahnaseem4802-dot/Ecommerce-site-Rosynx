@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check } from "lucide-react";
 import { api } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,12 +11,9 @@ export function FooterSubscribe() {
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const user = useAuth((s) => s.user);
-
-  // Prefill a logged-in visitor's email, but only while the field is untouched.
-  useEffect(() => {
-    if (user?.email) setEmail((cur) => cur || user.email);
-  }, [user]);
+  // Start read-only so the browser can't auto-fill a saved email on load — the
+  // field opens empty and only becomes editable (and shows suggestions) on tap.
+  const [ro, setRo] = useState(true);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +49,8 @@ export function FooterSubscribe() {
           type="email"
           required
           autoComplete="email"
+          readOnly={ro}
+          onFocus={() => setRo(false)}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Enter your email address"

@@ -329,6 +329,8 @@ function Field({
   reveal?: boolean;
   onToggleReveal?: () => void;
 }) {
+  // Start read-only so the browser can't auto-fill saved credentials on load.
+  const [ro, setRo] = useState(true);
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-coffee">
@@ -340,6 +342,8 @@ function Field({
           inputMode={inputMode}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setRo(false)}
+          readOnly={ro}
           placeholder={placeholder}
           autoComplete={autoComplete}
           name={name}

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCategories } from "@/lib/catalog-client";
 import type { ApiCategory } from "@/lib/catalog";
 import { Container } from "@/components/ui/container";
-import { Reveal, RevealGroup, RevealItem } from "@/components/ui/reveal";
+import { Reveal } from "@/components/ui/reveal";
 import { SectionHeading } from "./section-heading";
 
 export function FeaturedCategories() {
@@ -26,17 +26,7 @@ export function FeaturedCategories() {
         />
       </Reveal>
 
-      {featured.length > 4 ? (
-        <CategoryCarousel categories={featured} />
-      ) : (
-        <RevealGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.map((cat) => (
-            <RevealItem key={cat.slug}>
-              <CategoryCard cat={cat} />
-            </RevealItem>
-          ))}
-        </RevealGroup>
-      )}
+      {featured.length > 0 && <CategoryCarousel categories={featured} />}
     </Container>
   );
 }
@@ -63,9 +53,10 @@ function CategoryCarousel({ categories }: { categories: ApiCategory[] }) {
     const tick = () => {
       if (!paused) {
         el.scrollLeft += SPEED;
-        // scrollWidth is the doubled track; half is one full copy.
-        const half = el.scrollWidth / 2;
-        if (half > 0 && el.scrollLeft >= half) el.scrollLeft -= half;
+        // The track is rendered three times; one copy is a third of scrollWidth.
+        // Reset by a copy-width once we pass it so the loop point is invisible.
+        const copy = el.scrollWidth / 3;
+        if (copy > 0 && el.scrollLeft >= copy) el.scrollLeft -= copy;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -78,8 +69,9 @@ function CategoryCarousel({ categories }: { categories: ApiCategory[] }) {
     };
   }, [categories.length]);
 
-  // Duplicate the list so the loop point is invisible.
-  const loop = [...categories, ...categories];
+  // Render the list three times so the track is always wider than the viewport
+  // (keeps sliding smoothly even when there are only a few categories).
+  const loop = [...categories, ...categories, ...categories];
 
   return (
     <div

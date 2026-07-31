@@ -589,6 +589,9 @@ function GlassField({
   reveal?: boolean;
   onToggleReveal?: () => void;
 }) {
+  // Start read-only so the browser can't auto-fill saved credentials on load —
+  // the field opens empty and becomes editable (with suggestions) on focus.
+  const [ro, setRo] = useState(true);
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-white/90">
@@ -605,6 +608,8 @@ function GlassField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
+          onFocus={() => setRo(false)}
+          readOnly={ro}
           placeholder={placeholder}
           autoComplete={autoComplete}
           name={name}
