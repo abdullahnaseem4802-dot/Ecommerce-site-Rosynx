@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SplashScreen } from "@/components/layout/splash-screen";
+import { WhatsAppButton } from "@/components/layout/whatsapp-button";
 import { StoreSync } from "@/components/providers/store-sync";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        <WhatsAppButton />
         <Toaster />
       </body>
     </html>

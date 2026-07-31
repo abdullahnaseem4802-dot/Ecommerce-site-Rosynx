@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Heart, MailCheck, Package, ShoppingBag } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Heart,
+  Lock,
+  Mail,
+  MailCheck,
+  Package,
+  ShoppingBag,
+  User as UserIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useCartCount, useHydrated, useShop } from "@/lib/store";
 import {
@@ -15,8 +27,6 @@ import {
 } from "@/lib/api";
 import { takePendingAdd } from "@/lib/cart-intent";
 import { toast } from "@/lib/toast";
-import { Container } from "@/components/ui/container";
-import { PageBanner } from "@/components/ui/page-banner";
 import { AccountShell } from "@/components/account/account-shell";
 import { useMoney } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -157,6 +167,7 @@ function AuthForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [redirect, setRedirect] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Which fields the user has interacted with — errors only surface after a
   // blur (or once there's content), never on a pristine field.
@@ -310,44 +321,72 @@ function AuthForm() {
     setError("");
   };
 
+  const switchMode = (m: "login" | "register") => {
+    setMode(m);
+    setError("");
+    setTouched({ name: false, email: false, password: false });
+  };
+
   return (
-    <div className="pb-20">
-      <PageBanner title="My Account" crumb="Account" />
-      <Container>
-        <div className="mx-auto max-w-md rounded-2xl border border-line/60 bg-white p-8">
+    <div className="relative min-h-[88vh] w-full overflow-hidden">
+      {/* Full-bleed luxury background (same image as the admin login) */}
+      <Image
+        src="/images/login-bg.png"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
+      <div className="absolute inset-0 bg-[#2a1c10]/45" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(20,12,6,0.6)_100%)]" />
+
+      <div className="relative flex min-h-[88vh] items-center justify-center px-4 py-12">
+        <div className="w-full max-w-[460px] rounded-[28px] border border-white/25 bg-white/10 px-7 py-9 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:px-10">
+          {/* Logo */}
+          <div className="flex justify-center">
+            <Image
+              src="/images/logo.png"
+              alt="ROSYNX"
+              width={200}
+              height={60}
+              priority
+              className="h-12 w-auto object-contain brightness-0 invert drop-shadow"
+            />
+          </div>
+
           {step === "verify" ? (
             <>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-cream-card text-brand">
-                <MailCheck className="h-5 w-5" />
-              </span>
-              <h2 className="mt-4 font-serif text-xl font-bold text-espresso">
+              <div className="mt-6 flex justify-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-[#E0B274]">
+                  <MailCheck className="h-6 w-6" />
+                </span>
+              </div>
+              <h1 className="mt-4 text-center font-serif text-2xl font-bold text-white drop-shadow-sm">
                 Verify your email
-              </h2>
-              <p className="mt-1 text-sm text-muted">
+              </h1>
+              <p className="mt-2 text-center text-sm text-white/80">
                 {verifyNote || (
                   <>
                     We sent a 6-digit code to{" "}
-                    <span className="font-medium text-coffee">{pendingEmail}</span>.
+                    <span className="font-medium text-white">{pendingEmail}</span>.
                   </>
                 )}
               </p>
-              <form onSubmit={submitVerify} className="mt-6 space-y-4">
-                <Field
+              <form onSubmit={submitVerify} className="mt-7 space-y-5">
+                <GlassField
                   label="6-digit code"
+                  icon={Lock}
                   value={otp}
                   onChange={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456"
                   inputMode="numeric"
                 />
-                {error && <p className="text-sm text-sale">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={loading || otp.length !== 6}
-                  className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-70"
-                >
+                {error && <ErrorNote>{error}</ErrorNote>}
+                <SubmitButton disabled={loading || otp.length !== 6}>
                   {loading ? "Verifying…" : "Verify"}
-                </button>
-                <p className="text-center text-xs text-muted">
+                </SubmitButton>
+                <p className="text-center text-xs text-white/70">
                   Didn&apos;t get the code?{" "}
                   {cooldown > 0 ? (
                     <span>Resend in {cooldown}s</span>
@@ -355,7 +394,7 @@ function AuthForm() {
                     <button
                       type="button"
                       onClick={resend}
-                      className="font-medium text-brand hover:underline"
+                      className="font-medium text-[#E0B274] transition hover:text-[#f3d29a]"
                     >
                       Resend code
                     </button>
@@ -364,7 +403,7 @@ function AuthForm() {
                 <button
                   type="button"
                   onClick={backToForm}
-                  className="flex w-full items-center justify-center gap-1.5 text-xs font-medium text-muted transition hover:text-brand"
+                  className="flex w-full items-center justify-center gap-1.5 text-xs font-medium text-white/70 transition hover:text-white"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back
                 </button>
@@ -372,143 +411,221 @@ function AuthForm() {
             </>
           ) : (
             <>
+              <h1 className="mt-6 text-center font-serif text-3xl font-bold tracking-wide text-white drop-shadow-sm">
+                {mode === "login" ? "Welcome back" : "Create your account"}
+              </h1>
+              <p className="mt-2 text-center text-sm text-white/80">
+                {mode === "login"
+                  ? "Sign in to continue to ROSYNX."
+                  : "Join ROSYNX to shop, save and track your orders."}
+              </p>
+
               {redirect && (
-                <p className="mb-5 rounded-xl bg-cream-card px-4 py-3 text-center text-sm text-coffee">
-                  Please sign in or create an account to continue shopping.
-                  We&apos;ll take you straight back.
+                <p className="mt-5 rounded-xl bg-white/15 px-4 py-3 text-center text-sm text-white/90 ring-1 ring-white/20">
+                  Please sign in or create an account to continue — we&apos;ll take
+                  you straight back.
                 </p>
               )}
-              <div className="mb-6 flex rounded-full bg-cream-card p-1">
-                {(["login", "register"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => {
-                      setMode(m);
-                      setError("");
-                      setTouched({ name: false, email: false, password: false });
-                    }}
-                    className={cn(
-                      "flex-1 rounded-full py-2 text-sm font-semibold capitalize transition",
-                      mode === m ? "bg-brand text-white" : "text-coffee",
-                    )}
-                  >
-                    {m === "login" ? "Sign In" : "Register"}
-                  </button>
-                ))}
-              </div>
 
-              <form onSubmit={submit} className="space-y-4">
+              <form onSubmit={submit} className="mt-7 space-y-5">
                 {mode === "register" && (
-                  <Field
+                  <GlassField
                     label="Full name"
+                    icon={UserIcon}
                     value={name}
                     onChange={setName}
                     onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                     placeholder="Jane Doe"
+                    autoComplete="name"
                     error={nameError}
                   />
                 )}
-                <Field
-                  label="Email"
+                <GlassField
+                  label="Email address"
+                  icon={Mail}
                   type="email"
                   value={email}
                   onChange={setEmail}
                   onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                   placeholder="you@email.com"
+                  autoComplete="username"
                   error={emailError}
                 />
-                <Field
+                <GlassField
                   label="Password"
-                  type="password"
+                  icon={Lock}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={setPassword}
                   onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
                   error={passwordError}
                   hint={
-                    mode === "register"
+                    mode === "register" && !passwordError
                       ? "At least 8 characters, including a letter and a number."
                       : undefined
                   }
+                  reveal={showPassword}
+                  onToggleReveal={() => setShowPassword((v) => !v)}
                 />
 
                 {mode === "login" && (
                   <div className="text-right">
                     <Link
                       href="/account/reset"
-                      className="text-xs font-medium text-brand hover:underline"
+                      className="text-xs font-medium text-[#E0B274] transition hover:text-[#f3d29a]"
                     >
                       Forgot password?
                     </Link>
                   </div>
                 )}
 
-                {error && <p className="text-sm text-sale">{error}</p>}
+                {error && <ErrorNote>{error}</ErrorNote>}
 
-                <button
-                  type="submit"
-                  disabled={loading || !canSubmit}
-                  className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-70"
-                >
+                <SubmitButton disabled={loading || !canSubmit}>
                   {loading
                     ? "Please wait…"
                     : mode === "login"
                       ? "Sign In"
                       : "Create Account"}
-                </button>
+                </SubmitButton>
               </form>
 
-              <p className="mt-4 text-center text-xs text-muted">
+              {/* Link-based switch (no tabs) */}
+              <p className="mt-6 text-center text-sm text-white/80">
+                {mode === "login" ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => switchMode("register")}
+                      className="font-semibold text-[#E0B274] transition hover:text-[#f3d29a]"
+                    >
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => switchMode("login")}
+                      className="font-semibold text-[#E0B274] transition hover:text-[#f3d29a]"
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+              </p>
+
+              <p className="mt-4 text-center text-xs text-white/60">
                 Secure sign-in · your account syncs your cart, wishlist and orders.
               </p>
             </>
           )}
         </div>
-      </Container>
+      </div>
     </div>
   );
 }
 
-function Field({
+function ErrorNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-lg bg-red-500/20 px-3 py-2 text-sm text-red-100 ring-1 ring-red-400/30">
+      {children}
+    </p>
+  );
+}
+
+function SubmitButton({
+  children,
+  disabled,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#B66A1D] via-[#D08A2E] to-[#E9BE6E] py-3.5 text-sm font-semibold tracking-wide text-white shadow-[0_16px_36px_-12px_rgba(182,106,29,0.85)] transition hover:brightness-110 disabled:opacity-70"
+    >
+      {children}
+    </button>
+  );
+}
+
+function GlassField({
   label,
+  icon: Icon,
   value,
   onChange,
   onBlur,
   type = "text",
   placeholder,
   inputMode,
+  autoComplete,
   error,
   hint,
+  reveal,
+  onToggleReveal,
 }: {
   label: string;
+  icon: typeof Mail;
   value: string;
   onChange: (v: string) => void;
   onBlur?: () => void;
   type?: string;
   placeholder?: string;
   inputMode?: "numeric" | "text";
+  autoComplete?: string;
   error?: string;
   hint?: string;
+  reveal?: boolean;
+  onToggleReveal?: () => void;
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-coffee">{label}</label>
-      <input
-        type={type}
-        inputMode={inputMode}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        className={cn(
-          "w-full rounded-xl border bg-cream-soft px-4 py-3 text-sm focus:outline-none",
-          error ? "border-sale focus:border-sale" : "border-line focus:border-brand",
+      <label className="mb-1.5 block text-sm font-medium text-white/90">
+        {label}
+      </label>
+      <div className="relative">
+        <Icon
+          size={17}
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#E0B274]"
+        />
+        <input
+          type={type}
+          inputMode={inputMode}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          className={cn(
+            "w-full rounded-xl border bg-white/10 py-3 pl-11 text-sm text-white placeholder:text-white/50 shadow-inner outline-none transition focus:ring-2",
+            onToggleReveal ? "pr-11" : "pr-4",
+            error
+              ? "border-red-400/60 focus:border-red-300 focus:ring-red-400/30"
+              : "border-[#B66A1D]/50 focus:border-[#E0A94E] focus:ring-[#E0A94E]/30",
+          )}
+        />
+        {onToggleReveal && (
+          <button
+            type="button"
+            onClick={onToggleReveal}
+            aria-label={reveal ? "Hide password" : "Show password"}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-white/70 transition hover:text-white"
+          >
+            {reveal ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
         )}
-      />
+      </div>
       {error ? (
-        <p className="mt-1.5 text-xs text-sale">{error}</p>
+        <p className="mt-1.5 text-xs text-red-200">{error}</p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs text-muted">{hint}</p>
+        <p className="mt-1.5 text-xs text-white/60">{hint}</p>
       ) : null}
     </div>
   );

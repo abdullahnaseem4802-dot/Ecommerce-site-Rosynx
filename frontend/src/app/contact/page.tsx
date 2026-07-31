@@ -33,25 +33,6 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
-
-        {/* Map */}
-        <div className="mt-14">
-          <h2 className="mb-1 font-serif text-2xl font-bold text-espresso">
-            Find Our Studio
-          </h2>
-          <p className="mb-4 text-sm text-coffee/75">
-            Come say hello — we love welcoming visitors to see the craft up close.
-          </p>
-          <div className="h-72 overflow-hidden rounded-2xl border border-line/60 shadow-sm sm:h-80">
-            <iframe
-              title="ROSYNX studio location"
-              src="https://www.openstreetmap.org/export/embed.html?bbox=31.20%2C30.02%2C31.30%2C30.08&layer=mapnik"
-              className="h-full w-full"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          </div>
-        </div>
       </Container>
     </div>
   );

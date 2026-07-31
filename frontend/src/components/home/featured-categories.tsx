@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "@/lib/catalog-client";
 import type { ApiCategory } from "@/lib/catalog";
 import { Container } from "@/components/ui/container";
@@ -45,74 +44,56 @@ export function FeaturedCategories() {
 function CategoryCarousel({ categories }: { categories: ApiCategory[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
-  const step = (dir: 1 | -1) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const card = el.firstElementChild as HTMLElement | null;
-    const amount = card ? card.offsetWidth + 20 /* gap-5 */ : el.clientWidth;
-    // Loop: jump back to the start once we run past the end (or before start).
-    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
-    if (dir === 1 && atEnd) {
-      el.scrollTo({ left: 0, behavior: "smooth" });
-    } else if (dir === -1 && el.scrollLeft <= 4) {
-      el.scrollTo({ left: el.scrollWidth, behavior: "smooth" });
-    } else {
-      el.scrollBy({ left: amount * dir, behavior: "smooth" });
-    }
-  };
-
-  // Auto-advance, pausing while the pointer is over the carousel.
+  // Continuous marquee: scroll left at a slow, constant speed with no snapping,
+  // so the row glides non-stop instead of the old step-and-pause behaviour. The
+  // list is rendered twice; once we've scrolled past the first copy we subtract
+  // its width to loop seamlessly. Pauses while the pointer is over the row.
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
     let paused = false;
+    let raf = 0;
+    const SPEED = 0.4; // px per frame ≈ 24px/s — slow enough to read
+
     const onEnter = () => (paused = true);
     const onLeave = () => (paused = false);
     el.addEventListener("mouseenter", onEnter);
     el.addEventListener("mouseleave", onLeave);
-    const id = setInterval(() => {
-      if (!paused) step(1);
-    }, 3500);
+
+    const tick = () => {
+      if (!paused) {
+        el.scrollLeft += SPEED;
+        // scrollWidth is the doubled track; half is one full copy.
+        const half = el.scrollWidth / 2;
+        if (half > 0 && el.scrollLeft >= half) el.scrollLeft -= half;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
     return () => {
-      clearInterval(id);
+      cancelAnimationFrame(raf);
       el.removeEventListener("mouseenter", onEnter);
       el.removeEventListener("mouseleave", onLeave);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories.length]);
 
-  return (
-    <div className="relative">
-      <div
-        ref={trackRef}
-        className="flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {categories.map((cat) => (
-          <div
-            key={cat.slug}
-            className="w-[80%] shrink-0 snap-start sm:w-[calc((100%-20px)/2)] lg:w-[calc((100%-60px)/4)]"
-          >
-            <CategoryCard cat={cat} />
-          </div>
-        ))}
-      </div>
+  // Duplicate the list so the loop point is invisible.
+  const loop = [...categories, ...categories];
 
-      <button
-        type="button"
-        aria-label="Previous categories"
-        onClick={() => step(-1)}
-        className="absolute -left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white text-coffee shadow-md transition hover:bg-brand hover:text-white lg:-left-5"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        aria-label="Next categories"
-        onClick={() => step(1)}
-        className="absolute -right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white text-coffee shadow-md transition hover:bg-brand hover:text-white lg:-right-5"
-      >
-        <ChevronRight className="h-5 w-5" />
-      </button>
+  return (
+    <div
+      ref={trackRef}
+      className="flex gap-5 overflow-x-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {loop.map((cat, i) => (
+        <div
+          key={`${cat.slug}-${i}`}
+          className="w-[80%] shrink-0 sm:w-[calc((100%-20px)/2)] lg:w-[calc((100%-60px)/4)]"
+        >
+          <CategoryCard cat={cat} />
+        </div>
+      ))}
     </div>
   );
 }

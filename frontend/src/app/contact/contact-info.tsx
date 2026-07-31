@@ -1,19 +1,17 @@
 "use client";
 
-import { Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
-import { businessHours } from "@/lib/content";
-import { useSettings, whatsappDigits } from "@/lib/use-settings";
+import { Mail, MapPin, Phone } from "lucide-react";
+import { useSettings } from "@/lib/use-settings";
 
 /* Sensible fallbacks used only until live store settings load. */
 const FALLBACK = {
   address: "12 Artisan Lane, Cairo, Egypt",
   phone: "+20 100 000 0000",
-  email: "hello@rosynx.com",
+  email: "rosynxsupport@gmail.com",
 };
 
 export function ContactInfo() {
   const settings = useSettings();
-  const whatsapp = whatsappDigits(settings);
 
   const cards = [
     {
@@ -82,44 +80,7 @@ export function ContactInfo() {
         })}
       </div>
 
-      {/* Business hours */}
-      <div className="rounded-2xl border border-line/60 bg-white p-5">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-cream-card text-brand">
-            <Clock className="h-5 w-5" />
-          </span>
-          <p className="font-serif text-lg font-semibold text-espresso">
-            Business Hours
-          </p>
-        </div>
-        <ul className="mt-4 space-y-2 text-sm">
-          {businessHours.map((h) => (
-            <li
-              key={h.day}
-              className="flex items-center justify-between border-b border-line/50 pb-2 last:border-0 last:pb-0"
-            >
-              <span className="text-coffee/80">{h.day}</span>
-              <span className="font-medium text-coffee">{h.hours}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-muted">
-          We usually reply within 24 hours.
-        </p>
-      </div>
-
-      {/* WhatsApp */}
-      {whatsapp && (
-        <a
-          href={`https://wa.me/${whatsapp}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Chat on WhatsApp
-        </a>
-      )}
+      <p className="text-xs text-muted">We usually reply within 24 hours.</p>
     </div>
   );
 }
