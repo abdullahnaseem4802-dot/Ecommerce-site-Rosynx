@@ -78,9 +78,8 @@ export class AuthService {
       await this.issueVerifyOtp(userId, email, name);
     } catch (e) {
       this.logger.error(`verify OTP email to ${email} failed`, e as Error);
-      // TEMP DEBUG: surface the underlying transport error to diagnose SMTP.
       throw new ServiceUnavailableException(
-        `EMAILDEBUG: ${(e as Error)?.message ?? e}`,
+        "We couldn't send your verification email. Please try again in a moment.",
       );
     }
   }

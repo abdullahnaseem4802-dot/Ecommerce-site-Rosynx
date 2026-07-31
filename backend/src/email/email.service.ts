@@ -44,6 +44,12 @@ export class EmailService {
     ) {
       return this.sendViaSmtp(msg);
     }
+    // Brevo: HTTP API over port 443, so it works on hosts that block SMTP
+    // (Render free tier blocks all outbound SMTP). Free 300/day, delivers to
+    // ANY recipient after a single-sender verification — no domain purchase.
+    if (provider === 'brevo' && this.config.get('BREVO_API_KEY')) {
+      return this.sendViaBrevo(msg);
+    }
     if (provider === 'resend' && this.config.get('RESEND_API_KEY')) {
       return this.sendViaResend(msg);
     }
@@ -268,7 +274,48 @@ export class EmailService {
       // Surface the real reason (bad App Password, blocked login, quota) so the
       // OTP/verify paths can propagate it; best-effort callers catch it.
       this.logger.error(`SMTP send failed to ${msg.to}`, e as Error);
-      throw new Error(`SMTP: ${(e as Error)?.message ?? e}`);
+      throw new Error('Email send failed (SMTP)');
+    }
+  }
+
+  /**
+   * Send via Brevo's transactional HTTP API (https, port 443). Works where SMTP
+   * is blocked (e.g. Render's free tier). Free 300 emails/day; the from-address
+   * must be a Brevo-verified single sender (or a verified domain) — verify one
+   * Gmail by clicking Brevo's confirmation link, no domain needed.
+   *
+   * Setup: EMAIL_PROVIDER=brevo, BREVO_API_KEY=<Brevo → SMTP & API → API Keys>,
+   * EMAIL_FROM="ROSYNX <your-verified-sender@gmail.com>".
+   */
+  private async sendViaBrevo(msg: EmailMessage): Promise<void> {
+    const key = this.config.get<string>('BREVO_API_KEY');
+    const fromRaw =
+      this.config.get<string>('EMAIL_FROM') ?? 'ROSYNX <no-reply@rosynx.com>';
+    // Parse "Name <email>" → { name, email }; fall back to the raw as email.
+    const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(fromRaw);
+    const sender = match
+      ? { name: match[1] || 'ROSYNX', email: match[2] }
+      : { name: 'ROSYNX', email: fromRaw };
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': key as string,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: msg.to }],
+        subject: msg.subject,
+        htmlContent: msg.html,
+      }),
+    });
+    if (!res.ok) {
+      // Surface the reason (unverified sender, bad key, quota) so OTP/verify
+      // paths propagate it; best-effort callers catch it.
+      const body = await res.text().catch(() => '');
+      this.logger.error(`Brevo send failed (${res.status}) to ${msg.to}: ${body}`);
+      throw new Error(`Email send failed (${res.status})`);
     }
   }
 

@@ -46,19 +46,24 @@ services:
         sync: false
       - key: BASE_CURRENCY
         value: USD
-      # Email delivery (Resend). Order confirmations, support replies, coupon
-      # broadcasts and password-reset OTPs all send through this. Set
-      # EMAIL_PROVIDER=resend and paste RESEND_API_KEY in the dashboard to go
-      # live; leave it unset (or console) and emails are only logged.
-      # EMAIL_FROM must be a verified Resend sender/domain. Until you verify a
-      # domain, "ROSYNX <onboarding@resend.dev>" works but only delivers to the
-      # Resend account owner's own email.
+      # Email delivery (Brevo HTTP API). Order confirmations, support replies,
+      # coupon broadcasts and verify/reset OTPs all send through this. Brevo
+      # sends over HTTPS (port 443), so it works on Render's free tier — which
+      # blocks ALL outbound SMTP (Gmail/nodemailer times out on 465 AND 587).
+      # Free 300 emails/day and delivers to ANY recipient after a single-sender
+      # verification (verify one Gmail by clicking Brevo's link — no domain).
+      # Set EMAIL_PROVIDER=brevo + paste BREVO_API_KEY (Brevo → SMTP & API →
+      # API Keys). EMAIL_FROM must be a Brevo-verified sender. Leave provider
+      # unset/console and emails are only logged.
+      # (Resend is inert unless EMAIL_PROVIDER=resend; it only delivers to the
+      # account owner without a verified domain, so Brevo is the live path.)
       - key: EMAIL_PROVIDER
-        value: resend
-      - key: RESEND_API_KEY
+        value: brevo
+      - key: BREVO_API_KEY
         sync: false
+      # Must match a Brevo-verified sender exactly (verified 2026-07-30).
       - key: EMAIL_FROM
-        value: ROSYNX <onboarding@resend.dev>
+        value: ROSYNX <rosynxsupport@gmail.com>
       - key: SUPPORT_EMAIL
         sync: false
       # Keep Neon awake so the first request isn't a cold start. Note this only
