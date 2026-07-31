@@ -328,7 +328,7 @@ function AuthForm() {
   };
 
   return (
-    <div className="relative min-h-[88vh] w-full overflow-hidden">
+    <div className="relative min-h-[calc(100dvh-132px)] w-full overflow-hidden">
       {/* Full-bleed luxury background (same image as the admin login) */}
       <Image
         src="/images/login-bg.png"
@@ -341,8 +341,8 @@ function AuthForm() {
       <div className="absolute inset-0 bg-[#2a1c10]/45" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(20,12,6,0.6)_100%)]" />
 
-      <div className="relative flex min-h-[88vh] items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[460px] rounded-[28px] border border-white/25 bg-white/10 px-7 py-9 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:px-10">
+      <div className="relative flex min-h-[calc(100dvh-132px)] items-center justify-center px-4 py-8">
+        <div className="w-full max-w-[440px] rounded-[24px] border border-white/25 bg-white/10 px-7 py-7 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:px-9">
           {/* Logo */}
           <div className="flex justify-center">
             <Image
@@ -381,6 +381,8 @@ function AuthForm() {
                   onChange={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456"
                   inputMode="numeric"
+                  name="otp"
+                  autoComplete="one-time-code"
                 />
                 {error && <ErrorNote>{error}</ErrorNote>}
                 <SubmitButton disabled={loading || otp.length !== 6}>
@@ -448,7 +450,7 @@ function AuthForm() {
                   onChange={setEmail}
                   onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                   placeholder="you@email.com"
-                  autoComplete="username"
+                  autoComplete={mode === "register" ? "email" : "username"}
                   error={emailError}
                 />
                 <GlassField
@@ -566,6 +568,7 @@ function GlassField({
   placeholder,
   inputMode,
   autoComplete,
+  name,
   error,
   hint,
   reveal,
@@ -580,6 +583,7 @@ function GlassField({
   placeholder?: string;
   inputMode?: "numeric" | "text";
   autoComplete?: string;
+  name?: string;
   error?: string;
   hint?: string;
   reveal?: boolean;
@@ -603,6 +607,7 @@ function GlassField({
           onBlur={onBlur}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          name={name}
           className={cn(
             "w-full rounded-xl border bg-white/10 py-3 pl-11 text-sm text-white placeholder:text-white/50 shadow-inner outline-none transition focus:ring-2",
             onToggleReveal ? "pr-11" : "pr-4",

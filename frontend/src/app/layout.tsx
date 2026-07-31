@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/layout/site-header";
-import { SiteFooter } from "@/components/layout/site-footer";
+import { ConditionalFooter } from "@/components/layout/conditional-footer";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { WhatsAppButton } from "@/components/layout/whatsapp-button";
 import { StoreSync } from "@/components/providers/store-sync";
@@ -45,7 +45,7 @@ export default function RootLayout({
         <SplashScreen />
         <SiteHeader />
         <main className="flex-1">{children}</main>
-        <SiteFooter />
+        <ConditionalFooter />
         <WhatsAppButton />
         <Toaster />
       </body>
