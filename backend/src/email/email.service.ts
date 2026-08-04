@@ -198,6 +198,29 @@ export class EmailService {
   }
 
   /**
+   * Emails a new subscriber a plain welcome when the store has no active coupon
+   * to give away — so subscribing always confirms with a real email rather than
+   * silently sending nothing. Best-effort: a mail hiccup must not fail subscribe.
+   */
+  async subscribeWelcome(to: string): Promise<boolean> {
+    try {
+      await this.send({
+        to,
+        subject: 'Welcome to the ROSYNX Circle 🤎',
+        html: `
+        <h2>You're on the list!</h2>
+        <p>Thanks for subscribing to ROSYNX. You'll be the first to hear about
+        new handcrafted collections, artisan stories and members-only offers.</p>
+        <p>Happy shopping,<br/>The ROSYNX team</p>`,
+      });
+      return true;
+    } catch (e) {
+      this.logger.error(`subscribeWelcome email to ${to} failed`, e as Error);
+      return false;
+    }
+  }
+
+  /**
    * Emails a password-reset OTP. Failures propagate so the caller can surface a
    * "couldn't send, try again" — unlike the fire-and-forget support/coupon mail,
    * the whole reset flow is useless if the code never arrives.

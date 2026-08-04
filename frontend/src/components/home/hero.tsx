@@ -30,7 +30,7 @@ export function Hero() {
   return (
     <Container className="pt-6">
       <div
-        className="relative h-[380px] overflow-hidden rounded-3xl bg-espresso sm:h-[420px] lg:h-[480px]"
+        className="relative h-[300px] overflow-hidden rounded-3xl bg-espresso sm:h-[420px] lg:h-[480px]"
         onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
         onTouchEnd={(e) => {
           if (touchX.current === null) return;

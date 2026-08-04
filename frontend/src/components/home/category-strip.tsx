@@ -11,13 +11,13 @@ export function CategoryStrip() {
   const categories = useCategories();
   const strip = categories.slice(0, 5);
   return (
-    <Container className="pt-6">
-      <RevealGroup className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+    <Container className="pt-5 sm:pt-6">
+      <RevealGroup className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
         {strip.map((cat) => (
           <RevealItem key={cat.slug}>
             <Link
               href={`/shop?category=${cat.slug}`}
-              className="group relative flex h-[150px] items-center overflow-hidden rounded-2xl border border-line/60 bg-cream-card px-5 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-espresso/5"
+              className="group relative flex h-[118px] items-center overflow-hidden rounded-2xl border border-line/60 bg-cream-card px-4 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-espresso/5 sm:h-[150px] sm:px-5"
             >
               <div className="relative z-10 flex h-full flex-col justify-center">
                 <h3 className="font-serif text-lg font-semibold text-espresso">

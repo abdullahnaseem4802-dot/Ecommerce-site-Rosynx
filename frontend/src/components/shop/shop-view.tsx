@@ -73,6 +73,19 @@ export function ShopView({
   categories: ApiCategory[];
 }) {
   const ALL = products;
+  // Real per-category counts computed from the SAME catalog the filter matches
+  // against — so the number next to each category equals exactly how many
+  // products appear when you tick it (the backend `productCount` could include
+  // drafts/out-of-catalog items and drift from what the storefront shows).
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of ALL) {
+      const slugs = p.categorySlugs?.length ? p.categorySlugs : [p.category];
+      for (const s of new Set(slugs)) counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return counts;
+  }, [ALL]);
+
   const bounds = useMemo(() => {
     if (!products.length) return { min: 0, max: 1000 };
     const prices = products.map((p) => p.price);
@@ -179,6 +192,7 @@ export function ShopView({
             setFilters={setFilters}
             onReset={reset}
             categories={categories}
+            categoryCounts={categoryCounts}
             bounds={bounds}
           />
         </div>
@@ -361,6 +375,7 @@ export function ShopView({
                 setFilters={setFilters}
                 onReset={reset}
                 categories={categories}
+                categoryCounts={categoryCounts}
                 bounds={bounds}
               />
               <button

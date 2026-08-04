@@ -84,12 +84,14 @@ export function Filters({
   setFilters,
   onReset,
   categories,
+  categoryCounts,
   bounds,
 }: {
   filters: ShopFilters;
   setFilters: (f: ShopFilters) => void;
   onReset: () => void;
   categories: ApiCategory[];
+  categoryCounts?: Record<string, number>;
   bounds: { min: number; max: number };
 }) {
   return (
@@ -110,7 +112,7 @@ export function Filters({
             <Check
               key={c.slug}
               label={c.name.replace(" Collection", "")}
-              count={c.productCount ?? c.products}
+              count={categoryCounts?.[c.slug] ?? c.productCount ?? c.products}
               checked={filters.categories.includes(c.slug)}
               onChange={() =>
                 setFilters({

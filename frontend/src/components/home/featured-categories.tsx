@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useCategories } from "@/lib/catalog-client";
 import type { ApiCategory } from "@/lib/catalog";
 import { Container } from "@/components/ui/container";
@@ -13,11 +13,11 @@ export function FeaturedCategories() {
   const categories = useCategories();
   const flagged = categories.filter((c) => c.isFeatured);
   // Show every flagged category (not just the first four) — the carousel below
-  // loops through all of them when there are more than fit in one row.
+  // loops through all of them.
   const featured = flagged.length ? flagged : categories;
 
   return (
-    <Container className="pt-14">
+    <Container className="pt-10 sm:pt-14">
       <Reveal>
         <SectionHeading
           title="Featured Categories"
@@ -32,60 +32,33 @@ export function FeaturedCategories() {
 }
 
 function CategoryCarousel({ categories }: { categories: ApiCategory[] }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  // Continuous marquee: scroll left at a slow, constant speed with no snapping,
-  // so the row glides non-stop instead of the old step-and-pause behaviour. The
-  // list is rendered twice; once we've scrolled past the first copy we subtract
-  // its width to loop seamlessly. Pauses while the pointer is over the row.
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    let paused = false;
-    let raf = 0;
-    const SPEED = 0.4; // px per frame ≈ 24px/s — slow enough to read
-
-    const onEnter = () => (paused = true);
-    const onLeave = () => (paused = false);
-    el.addEventListener("mouseenter", onEnter);
-    el.addEventListener("mouseleave", onLeave);
-
-    const tick = () => {
-      if (!paused) {
-        el.scrollLeft += SPEED;
-        // The track is rendered three times; one copy is a third of scrollWidth.
-        // Reset by a copy-width once we pass it so the loop point is invisible.
-        const copy = el.scrollWidth / 3;
-        if (copy > 0 && el.scrollLeft >= copy) el.scrollLeft -= copy;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener("mouseenter", onEnter);
-      el.removeEventListener("mouseleave", onLeave);
-    };
-  }, [categories.length]);
-
-  // Render the list three times so the track is always wider than the viewport
-  // (keeps sliding smoothly even when there are only a few categories).
-  const loop = [...categories, ...categories, ...categories];
+  // Continuous marquee via a CSS transform (GPU-composited, so it slides the
+  // same on every browser/device regardless of scroll-container quirks). The
+  // list is rendered twice and translated by exactly -50%, so the moment the
+  // first copy scrolls fully off, the second copy is pixel-aligned where it
+  // began — a seamless, non-stop loop. Each card carries its gap as a right
+  // margin (not flex `gap`) so -50% lands exactly on one copy's width.
+  const loop = [...categories, ...categories];
+  // Keep a constant reading speed regardless of how many categories there are:
+  // ~one card every 5s, minimum 20s per full pass.
+  const duration = Math.max(20, categories.length * 5);
 
   return (
-    <div
-      ref={trackRef}
-      className="flex gap-5 overflow-x-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {loop.map((cat, i) => (
-        <div
-          key={`${cat.slug}-${i}`}
-          className="w-[80%] shrink-0 sm:w-[calc((100%-20px)/2)] lg:w-[calc((100%-60px)/4)]"
-        >
-          <CategoryCard cat={cat} />
-        </div>
-      ))}
+    <div className="overflow-hidden">
+      <motion.div
+        className="flex w-max"
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ duration, ease: "linear", repeat: Infinity }}
+      >
+        {loop.map((cat, i) => (
+          <div
+            key={`${cat.slug}-${i}`}
+            className="mr-5 w-[78vw] max-w-[320px] shrink-0 sm:w-[320px] lg:w-[300px]"
+          >
+            <CategoryCard cat={cat} />
+          </div>
+        ))}
+      </motion.div>
     </div>
   );
 }
@@ -100,7 +73,7 @@ function CategoryCard({ cat }: { cat: ApiCategory }) {
         src={cat.imageUrl || `/images/categories/${cat.slug}.jpg`}
         alt={cat.name}
         fill
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+        sizes="(max-width: 640px) 78vw, (max-width: 1024px) 320px, 300px"
         className="object-cover transition duration-700 group-hover:scale-110"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-espresso/80 via-espresso/25 to-transparent" />

@@ -44,7 +44,17 @@ export class SubscribersService {
       where: { id: 'singleton' },
     });
     const coupon = await this.pickWelcomeCoupon(settings?.welcomeCouponCode);
-    if (!coupon) return;
+    if (!coupon) {
+      // No active coupon configured — still confirm the subscription with a
+      // plain welcome so the subscriber always receives an email. (To hand out
+      // a code, set an active welcome coupon in Admin → Settings.)
+      this.logger.warn(
+        `No active welcome coupon — sent plain welcome to ${to}. ` +
+          `Set a welcome coupon in Admin → Settings to email a code.`,
+      );
+      await this.email.subscribeWelcome(to);
+      return;
+    }
     await this.email.couponOffer(to, {
       code: coupon.code,
       type: coupon.type,
