@@ -32,7 +32,16 @@ import {
   cityOptions,
 } from "./location-data";
 
-type PaymentValue = "COD" | "BANK_TRANSFER" | "CARD";
+type PaymentValue =
+  | "COD"
+  | "BANK_TRANSFER"
+  | "JAZZCASH"
+  | "EASYPAISA"
+  | "CARD";
+
+// Methods where the customer sends money first, then enters a transaction ID so
+// the admin can verify it. Card/COD don't need a reference.
+const MANUAL_METHODS: PaymentValue[] = ["BANK_TRANSFER", "JAZZCASH", "EASYPAISA"];
 
 type Form = {
   name: string;
@@ -138,6 +147,8 @@ export default function CheckoutPage() {
 
   const [form, setForm] = useState<Form>(empty);
   const [payment, setPayment] = useState<PaymentValue>("COD");
+  // Transaction ID the customer enters after paying via a manual method.
+  const [paymentRef, setPaymentRef] = useState("");
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
@@ -286,6 +297,18 @@ export default function CheckoutPage() {
       opts.push({ value: "COD", label: "Cash on Delivery" });
     if (settings?.bankTransferEnabled)
       opts.push({ value: "BANK_TRANSFER", label: "Bank Transfer" });
+    if (settings?.jazzcashEnabled)
+      opts.push({
+        value: "JAZZCASH",
+        label: "JazzCash",
+        caption: "Send to our JazzCash account, then enter the transaction ID",
+      });
+    if (settings?.easypaisaEnabled)
+      opts.push({
+        value: "EASYPAISA",
+        label: "EasyPaisa",
+        caption: "Send to our EasyPaisa account, then enter the transaction ID",
+      });
     if (settings?.cardEnabled)
       opts.push({
         value: "CARD",
@@ -339,6 +362,18 @@ export default function CheckoutPage() {
 
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+
+    // JazzCash / EasyPaisa require the customer's transaction ID so the admin
+    // can verify the payment. Bank transfer reference stays optional.
+    if (
+      (payment === "JAZZCASH" || payment === "EASYPAISA") &&
+      !paymentRef.trim()
+    ) {
+      setServerError(
+        "Please enter the transaction ID from your payment so we can verify it.",
+      );
+      return;
+    }
     if (cart.length === 0) return;
 
     const phone = composedPhone;
@@ -348,6 +383,9 @@ export default function CheckoutPage() {
       const res = await api.checkout({
         email: form.email,
         paymentMethod: payment,
+        paymentReference: MANUAL_METHODS.includes(payment)
+          ? paymentRef.trim() || undefined
+          : undefined,
         couponCode: coupon?.code,
         guestToken: getGuestToken(),
         shipping: {
@@ -568,13 +606,17 @@ export default function CheckoutPage() {
                         )}
                       </span>
                     </label>
-                    {m.value === "BANK_TRANSFER" &&
-                      payment === "BANK_TRANSFER" &&
-                      settings?.bankDetails && (
-                        <div className="mt-2 whitespace-pre-line rounded-xl border border-line bg-cream-soft px-4 py-3 text-xs text-coffee">
-                          {settings.bankDetails}
-                        </div>
-                      )}
+                    {payment === m.value && MANUAL_METHODS.includes(m.value) && (
+                      <ManualPaymentPanel
+                        method={m.value}
+                        settings={settings}
+                        reference={paymentRef}
+                        onReference={(v) => {
+                          setPaymentRef(v);
+                          if (serverError) setServerError("");
+                        }}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -660,6 +702,96 @@ export default function CheckoutPage() {
           </div>
         </div>
       </Container>
+    </div>
+  );
+}
+
+/** A single label/value row for the receiving-account details. */
+function DetailRow({ label, value }: { label: string; value?: string }) {
+  if (!value?.trim()) return null;
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-0.5">
+      <span className="text-muted">{label}</span>
+      <span className="text-right font-medium text-coffee">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Shown under a selected manual method (bank transfer / JazzCash / EasyPaisa):
+ * the store's receiving-account details + a box for the customer's transaction ID.
+ */
+function ManualPaymentPanel({
+  method,
+  settings,
+  reference,
+  onReference,
+}: {
+  method: PaymentValue;
+  settings: StoreSettings | null;
+  reference: string;
+  onReference: (v: string) => void;
+}) {
+  const wallet = method === "JAZZCASH" || method === "EASYPAISA";
+  const title =
+    method === "BANK_TRANSFER"
+      ? "Transfer to this account"
+      : method === "JAZZCASH"
+        ? "Send to our JazzCash account"
+        : "Send to our EasyPaisa account";
+
+  return (
+    <div className="mt-2 space-y-3 rounded-xl border border-line bg-cream-soft px-4 py-3 text-xs text-coffee">
+      <div>
+        <p className="mb-1 font-semibold text-espresso">{title}</p>
+        <div className="space-y-0.5">
+          {method === "BANK_TRANSFER" && (
+            <>
+              <DetailRow label="Bank" value={settings?.bankName} />
+              <DetailRow label="Account title" value={settings?.bankAccountTitle} />
+              <DetailRow label="Account no." value={settings?.bankAccountNumber} />
+              <DetailRow label="IBAN" value={settings?.bankIban} />
+            </>
+          )}
+          {method === "JAZZCASH" && (
+            <>
+              <DetailRow label="JazzCash no." value={settings?.jazzcashNumber} />
+              <DetailRow label="Account title" value={settings?.jazzcashName} />
+            </>
+          )}
+          {method === "EASYPAISA" && (
+            <>
+              <DetailRow label="EasyPaisa no." value={settings?.easypaisaNumber} />
+              <DetailRow label="Account title" value={settings?.easypaisaName} />
+            </>
+          )}
+        </div>
+        {method === "BANK_TRANSFER" && settings?.bankDetails?.trim() && (
+          <p className="mt-2 whitespace-pre-line text-muted">
+            {settings.bankDetails}
+          </p>
+        )}
+      </div>
+
+      <label className="block">
+        <span className="mb-1 block font-medium text-coffee">
+          Transaction ID {wallet ? "" : "(optional)"}
+        </span>
+        <input
+          value={reference}
+          onChange={(e) => onReference(e.target.value)}
+          placeholder={
+            wallet
+              ? "Enter the TID from your payment confirmation"
+              : "Bank reference / TID (helps us verify faster)"
+          }
+          className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-coffee focus:border-brand focus:outline-none"
+        />
+        <span className="mt-1 block text-muted">
+          Pay the total shown, then enter the transaction ID here. We&apos;ll
+          confirm your order once the payment is verified.
+        </span>
+      </label>
     </div>
   );
 }

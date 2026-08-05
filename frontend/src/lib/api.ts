@@ -261,7 +261,17 @@ export interface StoreSettings {
   flatShippingCents: number;
   codEnabled: boolean;
   bankTransferEnabled: boolean;
+  jazzcashEnabled: boolean;
+  easypaisaEnabled: boolean;
   cardEnabled: boolean;
+  bankName: string;
+  bankAccountTitle: string;
+  bankAccountNumber: string;
+  bankIban: string;
+  jazzcashNumber: string;
+  jazzcashName: string;
+  easypaisaNumber: string;
+  easypaisaName: string;
   bankDetails: string;
 }
 

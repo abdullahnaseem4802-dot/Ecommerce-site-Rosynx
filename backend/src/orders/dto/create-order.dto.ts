@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -75,6 +76,14 @@ export class CreateOrderDto {
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
+
+  // For manual methods (JazzCash / EasyPaisa / bank transfer): the transaction
+  // ID / reference the customer enters after sending the money, so the admin can
+  // match and verify the payment. Ignored for COD/card.
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  paymentReference?: string;
 
   @IsOptional()
   @IsString()

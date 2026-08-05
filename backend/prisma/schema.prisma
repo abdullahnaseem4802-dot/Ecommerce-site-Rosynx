@@ -33,6 +33,8 @@ enum OrderStatus {
 enum PaymentMethod {
   COD          // Cash on Delivery
   BANK_TRANSFER
+  JAZZCASH     // manual — customer sends to the store wallet, admin verifies
+  EASYPAISA    // manual — customer sends to the store wallet, admin verifies
   PAYMOB
   CARD
 }
@@ -399,8 +401,20 @@ model StoreSetting {
   flatShippingCents       Int      @default(0)
   codEnabled              Boolean  @default(true)
   bankTransferEnabled     Boolean  @default(true)
+  jazzcashEnabled         Boolean  @default(false) // manual wallet transfer
+  easypaisaEnabled        Boolean  @default(false) // manual wallet transfer
   cardEnabled             Boolean  @default(false) // online gateway (sandbox)
-  bankDetails             String   @default("") // shown to customer for bank transfer
+  // Structured receiving details shown to the customer at checkout. Admin edits
+  // these anytime; `bankDetails` below stays as an optional free-text notes field.
+  bankName                String   @default("")
+  bankAccountTitle        String   @default("")
+  bankAccountNumber       String   @default("")
+  bankIban                String   @default("")
+  jazzcashNumber          String   @default("")
+  jazzcashName            String   @default("")
+  easypaisaNumber         String   @default("")
+  easypaisaName           String   @default("")
+  bankDetails             String   @default("") // optional extra bank-transfer notes
   // Coupon auto-emailed to a NEW newsletter subscriber. Empty = fall back to any
   // currently-active valid coupon; if none exists, no coupon email is sent.
   welcomeCouponCode       String   @default("")

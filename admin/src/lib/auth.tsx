@@ -21,6 +21,8 @@ interface AuthCtx {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Re-fetch the signed-in admin (e.g. after a profile edit) so the UI updates. */
+  refreshUser: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
@@ -59,8 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
+    const u = await api.get<AdminUser>("/auth/me");
+    setUser(u);
+  }, []);
+
   return (
-    <Ctx.Provider value={{ user, loading, login, logout }}>
+    <Ctx.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </Ctx.Provider>
   );

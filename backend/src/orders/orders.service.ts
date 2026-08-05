@@ -23,6 +23,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 const ORDER_INCLUDE = {
   items: true,
   events: { orderBy: { createdAt: 'asc' } },
+  payments: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.OrderInclude;
 
 @Injectable()
@@ -95,6 +96,9 @@ export class OrdersService {
             provider: dto.paymentMethod,
             amountCents: totalCents,
             status: paymentStatus,
+            // Manual methods: keep the customer-supplied transaction ID so the
+            // admin can match the incoming money to this order.
+            providerRef: dto.paymentReference?.trim() || undefined,
           },
         },
         events: {
@@ -326,7 +330,11 @@ export class OrdersService {
 
   private initialStatuses(method: PaymentMethod) {
     switch (method) {
+      // Manual methods: the customer says they've sent the money, but the admin
+      // must confirm it arrived before fulfilling — park on hold, unpaid.
       case PaymentMethod.BANK_TRANSFER:
+      case PaymentMethod.JAZZCASH:
+      case PaymentMethod.EASYPAISA:
         return { status: OrderStatus.ON_HOLD, paymentStatus: PaymentStatus.UNPAID };
       case PaymentMethod.PAYMOB:
       case PaymentMethod.CARD:
@@ -353,6 +361,10 @@ export class OrdersService {
       status: o.status,
       paymentMethod: o.paymentMethod,
       paymentStatus: o.paymentStatus,
+      // Customer-supplied transaction ID for manual methods (JazzCash / EasyPaisa
+      // / bank transfer) — lets the admin match the money to the order.
+      paymentReference:
+        (o.payments ?? []).map((p: any) => p.providerRef).find(Boolean) ?? null,
       currency: o.currency,
       email: o.email,
       subtotal: o.subtotalCents / 100,

@@ -157,6 +157,23 @@ export default function OrdersPage() {
                           </p>
 
                           <p className="mb-2 mt-4 text-xs font-semibold uppercase text-muted">
+                            Payment
+                          </p>
+                          <div className="space-y-1 text-sm">
+                            <Row
+                              label="Method"
+                              value={o.paymentMethod.replace(/_/g, " ")}
+                            />
+                            <Row label="Status" value={o.paymentStatus} />
+                            {o.paymentReference && (
+                              <Row
+                                label="Transaction ID"
+                                value={o.paymentReference}
+                              />
+                            )}
+                          </div>
+
+                          <p className="mb-2 mt-4 text-xs font-semibold uppercase text-muted">
                             Update status
                           </p>
                           <select

@@ -226,6 +226,15 @@ export class AuthService {
     return this.publicUser(user);
   }
 
+  /** Self-service profile update (name + phone). Returns the fresh public user. */
+  async updateProfile(userId: string, dto: { name?: string; phone?: string }) {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.phone !== undefined) data.phone = dto.phone.trim() || null;
+    const user = await this.prisma.user.update({ where: { id: userId }, data });
+    return this.publicUser(user);
+  }
+
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     if (!newPassword || newPassword.length < 8)
       throw new UnauthorizedException('New password must be at least 8 characters');

@@ -21,7 +21,17 @@ interface StoreForm {
   flatShipping: string;
   codEnabled: boolean;
   bankTransferEnabled: boolean;
+  jazzcashEnabled: boolean;
+  easypaisaEnabled: boolean;
   cardEnabled: boolean;
+  bankName: string;
+  bankAccountTitle: string;
+  bankAccountNumber: string;
+  bankIban: string;
+  jazzcashNumber: string;
+  jazzcashName: string;
+  easypaisaNumber: string;
+  easypaisaName: string;
   bankDetails: string;
   welcomeCouponCode: string;
 }
@@ -49,12 +59,42 @@ function Toggle({
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [show, setShow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Editable display name (fixes the dummy "Test Admin").
+  const [name, setName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (user?.name) setName(user.name);
+  }, [user?.name]);
+
+  async function saveName(e: React.FormEvent) {
+    e.preventDefault();
+    setNameMsg(null);
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setNameMsg({ ok: false, text: "Name must be at least 2 characters." });
+      return;
+    }
+    setSavingName(true);
+    try {
+      await api.patch("/auth/profile", { name: trimmed });
+      await refreshUser();
+      setNameMsg({ ok: true, text: "Name updated." });
+    } catch (err) {
+      setNameMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   const [store, setStore] = useState<StoreForm | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -77,7 +117,17 @@ export default function SettingsPage() {
         flatShipping: String((s.flatShippingCents ?? 0) / 100),
         codEnabled: s.codEnabled,
         bankTransferEnabled: s.bankTransferEnabled,
+        jazzcashEnabled: s.jazzcashEnabled ?? false,
+        easypaisaEnabled: s.easypaisaEnabled ?? false,
         cardEnabled: s.cardEnabled,
+        bankName: s.bankName ?? "",
+        bankAccountTitle: s.bankAccountTitle ?? "",
+        bankAccountNumber: s.bankAccountNumber ?? "",
+        bankIban: s.bankIban ?? "",
+        jazzcashNumber: s.jazzcashNumber ?? "",
+        jazzcashName: s.jazzcashName ?? "",
+        easypaisaNumber: s.easypaisaNumber ?? "",
+        easypaisaName: s.easypaisaName ?? "",
         bankDetails: s.bankDetails ?? "",
         welcomeCouponCode: s.welcomeCouponCode ?? "",
       }),
@@ -130,8 +180,18 @@ export default function SettingsPage() {
         ),
         codEnabled: store.codEnabled,
         bankTransferEnabled: store.bankTransferEnabled,
+        jazzcashEnabled: store.jazzcashEnabled,
+        easypaisaEnabled: store.easypaisaEnabled,
         cardEnabled: store.cardEnabled,
-        bankDetails: store.bankDetails || undefined,
+        bankName: store.bankName,
+        bankAccountTitle: store.bankAccountTitle,
+        bankAccountNumber: store.bankAccountNumber,
+        bankIban: store.bankIban,
+        jazzcashNumber: store.jazzcashNumber,
+        jazzcashName: store.jazzcashName,
+        easypaisaNumber: store.easypaisaNumber,
+        easypaisaName: store.easypaisaName,
+        bankDetails: store.bankDetails,
         welcomeCouponCode: store.welcomeCouponCode,
       });
       setStoreMsg({ ok: true, text: "Store settings saved." });
@@ -157,7 +217,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-copper/12 text-lg font-semibold text-copper-dark">
-              {user?.name.slice(0, 2).toUpperCase()}
+              {(name || user?.name || "?").slice(0, 2).toUpperCase()}
             </span>
             <div>
               <p className="font-semibold text-fg">{user?.name}</p>
@@ -167,6 +227,36 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
+          <form onSubmit={saveName} className="mt-4 border-t border-line pt-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">
+                Display name
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm outline-none focus:border-copper"
+              />
+            </label>
+            {nameMsg && (
+              <p
+                className={`mt-2 text-sm ${nameMsg.ok ? "text-good" : "text-bad"}`}
+              >
+                {nameMsg.text}
+              </p>
+            )}
+            <div className="mt-3">
+              <Button
+                type="submit"
+                variant="subtle"
+                disabled={savingName || name.trim() === (user?.name ?? "")}
+              >
+                {savingName ? <Spinner /> : <User size={15} />}
+                Save name
+              </Button>
+            </div>
+          </form>
         </Card>
       </motion.div>
 
@@ -324,22 +414,113 @@ export default function SettingsPage() {
                     label="Bank transfer"
                   />
                   <Toggle
+                    checked={store.jazzcashEnabled}
+                    onChange={(v) => up("jazzcashEnabled", v)}
+                    label="JazzCash"
+                  />
+                  <Toggle
+                    checked={store.easypaisaEnabled}
+                    onChange={(v) => up("easypaisaEnabled", v)}
+                    label="EasyPaisa"
+                  />
+                  <Toggle
                     checked={store.cardEnabled}
                     onChange={(v) => up("cardEnabled", v)}
-                    label="Card"
+                    label="Card (online gateway)"
                   />
                 </div>
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-xs font-medium text-muted">
-                    Bank details (shown to customers for bank transfer)
-                  </span>
-                  <textarea
-                    value={store.bankDetails}
-                    onChange={(e) => up("bankDetails", e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-copper focus:ring-2 focus:ring-copper/20"
-                  />
-                </label>
+
+                {/* Bank (receiving) details — shown to customers who pick Bank transfer */}
+                {store.bankTransferEnabled && (
+                  <div className="mt-4 rounded-lg border border-line bg-panel-2/40 p-4">
+                    <p className="mb-3 text-xs font-semibold text-fg">
+                      Bank account (shown for Bank transfer)
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        label="Bank name"
+                        placeholder="e.g. Meezan Bank"
+                        value={store.bankName}
+                        onChange={(e) => up("bankName", e.target.value)}
+                      />
+                      <Input
+                        label="Account title"
+                        placeholder="Account holder name"
+                        value={store.bankAccountTitle}
+                        onChange={(e) => up("bankAccountTitle", e.target.value)}
+                      />
+                      <Input
+                        label="Account number"
+                        value={store.bankAccountNumber}
+                        onChange={(e) => up("bankAccountNumber", e.target.value)}
+                      />
+                      <Input
+                        label="IBAN"
+                        placeholder="PK.. .... .... ...."
+                        value={store.bankIban}
+                        onChange={(e) => up("bankIban", e.target.value)}
+                      />
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="mb-1.5 block text-xs font-medium text-muted">
+                        Extra notes (optional)
+                      </span>
+                      <textarea
+                        value={store.bankDetails}
+                        onChange={(e) => up("bankDetails", e.target.value)}
+                        rows={2}
+                        placeholder="Branch, instructions, etc."
+                        className="w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-copper focus:ring-2 focus:ring-copper/20"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {/* JazzCash wallet (receiving) */}
+                {store.jazzcashEnabled && (
+                  <div className="mt-4 rounded-lg border border-line bg-panel-2/40 p-4">
+                    <p className="mb-3 text-xs font-semibold text-fg">
+                      JazzCash account (shown for JazzCash)
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        label="JazzCash number"
+                        placeholder="03XX XXXXXXX"
+                        value={store.jazzcashNumber}
+                        onChange={(e) => up("jazzcashNumber", e.target.value)}
+                      />
+                      <Input
+                        label="Account title"
+                        placeholder="Account holder name"
+                        value={store.jazzcashName}
+                        onChange={(e) => up("jazzcashName", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* EasyPaisa wallet (receiving) */}
+                {store.easypaisaEnabled && (
+                  <div className="mt-4 rounded-lg border border-line bg-panel-2/40 p-4">
+                    <p className="mb-3 text-xs font-semibold text-fg">
+                      EasyPaisa account (shown for EasyPaisa)
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        label="EasyPaisa number"
+                        placeholder="03XX XXXXXXX"
+                        value={store.easypaisaNumber}
+                        onChange={(e) => up("easypaisaNumber", e.target.value)}
+                      />
+                      <Input
+                        label="Account title"
+                        placeholder="Account holder name"
+                        value={store.easypaisaName}
+                        onChange={(e) => up("easypaisaName", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-line pt-4">
