@@ -126,9 +126,9 @@ export default function SupportPage() {
                 <p className="mt-1 truncate text-sm text-muted">{t.message}</p>
                 <p className="mt-1 text-xs text-muted">
                   {formatWhen(t.createdAt)} ·{" "}
-                  {t.replies.length === 1
+                  {(t.replies?.length ?? 0) === 1
                     ? "1 reply"
-                    : `${t.replies.length} replies`}
+                    : `${t.replies?.length ?? 0} replies`}
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted" />
@@ -205,7 +205,7 @@ function Thread({
             at={ticket.createdAt}
           />
           <AnimatePresence initial={false}>
-            {ticket.replies.map((r) => (
+            {(ticket.replies ?? []).map((r) => (
               <motion.div
                 key={r.id}
                 initial={{ opacity: 0, y: 8 }}
