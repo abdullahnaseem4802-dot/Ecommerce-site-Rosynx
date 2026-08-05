@@ -143,6 +143,10 @@ export class ContactService {
         ...(dto.isRead !== undefined ? { isRead: dto.isRead } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
+      // The admin panel replaces the open ticket with this response and then
+      // renders `ticket.replies` — omitting the relation returns it undefined
+      // and crashes the page. Keep the shape identical to list()/adminReply().
+      include: { replies: { orderBy: { createdAt: 'asc' } } },
     });
   }
 

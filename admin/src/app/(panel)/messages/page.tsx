@@ -197,7 +197,7 @@ export default function MessagesPage() {
                   <span className="text-[11px] text-muted">
                     {new Date(m.createdAt).toLocaleDateString()}
                   </span>
-                  {m.replies.length > 0 && (
+                  {(m.replies?.length ?? 0) > 0 && (
                     <span className="text-[11px] text-muted">
                       {m.replies.length}{" "}
                       {m.replies.length === 1 ? "reply" : "replies"}
@@ -252,7 +252,7 @@ export default function MessagesPage() {
                 </p>
               </div>
 
-              {open.replies.map((r) => (
+              {(open.replies ?? []).map((r) => (
                 <div
                   key={r.id}
                   className={
