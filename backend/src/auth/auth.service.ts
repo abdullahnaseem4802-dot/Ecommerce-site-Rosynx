@@ -293,11 +293,15 @@ export class AuthService {
           resetOtpAttempts: 0,
         },
       });
-      try {
-        await this.email.passwordResetOtp(user.email, user.name, otp);
-      } catch (e) {
-        this.logger.error(`reset OTP email to ${user.email} failed`, e as Error);
-      }
+      // Fire-and-forget: the OTP is already saved, so don't make the caller wait
+      // on the mail provider (or a Render cold-start) before responding. The
+      // client always gets the neutral "if registered, a code is on its way",
+      // and the email lands as soon as the provider delivers it.
+      void this.email
+        .passwordResetOtp(user.email, user.name, otp)
+        .catch((e) =>
+          this.logger.error(`reset OTP email to ${user.email} failed`, e as Error),
+        );
     }
     return { ok: true };
   }

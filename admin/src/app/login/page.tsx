@@ -10,10 +10,16 @@ import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui";
 
 // The admin login has two modes: the normal sign-in, and a self-service
-// password reset (email → 6-digit OTP → new password) that reuses the same
-// backend flow as the storefront. `reset` has two sub-steps.
+// password reset that reuses the same backend flow as the storefront. The reset
+// is split into three sub-steps so the shopper sees ONE thing at a time:
+//   email    → type the address, receive a code
+//   code     → type ONLY the 6-digit code (with a countdown + resend)
+//   password → set the new password (shown only after the code is entered)
 type Mode = "login" | "forgot";
-type ForgotStep = "email" | "reset";
+type ForgotStep = "email" | "code" | "password";
+
+// How long (seconds) before "Resend code" becomes available again.
+const RESEND_SECONDS = 120;
 
 const inputCls =
   "w-full rounded-xl border border-[#B66A1D]/50 bg-white/10 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/50 shadow-inner outline-none transition focus:border-[#E0A94E] focus:ring-2 focus:ring-[#E0A94E]/30";
@@ -38,10 +44,22 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showNew, setShowNew] = useState(false);
+  // Countdown that gates the "Resend code" button.
+  const [secondsLeft, setSecondsLeft] = useState(0);
 
   useEffect(() => {
     if (user) router.replace("/");
   }, [user, router]);
+
+  // Tick the resend countdown down to zero.
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const t = setInterval(
+      () => setSecondsLeft((s) => (s <= 1 ? 0 : s - 1)),
+      1000,
+    );
+    return () => clearInterval(t);
+  }, [secondsLeft]);
 
   function resetMessages() {
     setError("");
@@ -54,6 +72,7 @@ export default function LoginPage() {
     setOtp("");
     setNewPassword("");
     setConfirm("");
+    setSecondsLeft(0);
     resetMessages();
   }
 
@@ -71,6 +90,7 @@ export default function LoginPage() {
     }
   }
 
+  // Step 1 → 2: request a code and move to the code-entry step.
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
@@ -82,8 +102,9 @@ export default function LoginPage() {
     try {
       // Always returns ok (never reveals whether the email exists).
       await api.post("/auth/forgot-password", { email: email.trim() });
-      setStep("reset");
-      setNotice("If that email is registered, a 6-digit code is on its way.");
+      setStep("code");
+      setSecondsLeft(RESEND_SECONDS);
+      setNotice("A 6-digit code is on its way to your email.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -91,13 +112,41 @@ export default function LoginPage() {
     }
   }
 
-  async function doReset(e: React.FormEvent) {
+  // Re-send a fresh code from the code step (only when the countdown is done).
+  async function resend() {
+    if (secondsLeft > 0 || loading) return;
+    resetMessages();
+    setLoading(true);
+    try {
+      await api.post("/auth/forgot-password", { email: email.trim() });
+      setSecondsLeft(RESEND_SECONDS);
+      setOtp("");
+      setNotice("A new code has been sent.");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Step 2 → 3: the code looks valid (6 digits) → reveal the password fields.
+  // The code itself is verified together with the new password on submit.
+  function continueToPassword(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
     if (otp.trim().length !== 6) {
       setError("Enter the 6-digit code from your email.");
       return;
     }
+    setStep("password");
+  }
+
+  // Step 3: set the new password. On success, drop the admin back on the sign-in
+  // screen with the NEW password already filled in (so the browser's saved old
+  // password doesn't get in the way) — they just press Sign in.
+  async function doReset(e: React.FormEvent) {
+    e.preventDefault();
+    resetMessages();
     if (newPassword.length < 8) {
       setError("New password must be at least 8 characters.");
       return;
@@ -113,14 +162,28 @@ export default function LoginPage() {
         otp: otp.trim(),
         newPassword,
       });
-      backToLogin();
-      setNotice("Password updated. Sign in with your new password.");
+      const np = newPassword;
+      setMode("login");
+      setStep("email");
+      setOtp("");
+      setNewPassword("");
+      setConfirm("");
+      setSecondsLeft(0);
+      // Prefill the login form with the new password (beats saved autofill).
+      setPassword(np);
+      setShow(true);
+      setError("");
+      setNotice("Password updated — your new password is filled in. Press Sign in.");
     } catch (err) {
+      // A wrong/expired code surfaces here → send them back to the code step.
       setError((err as Error).message);
+      setStep("code");
     } finally {
       setLoading(false);
     }
   }
+
+  const mmss = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`;
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
@@ -171,7 +234,9 @@ export default function LoginPage() {
                 ? "Welcome back! Please sign in to continue."
                 : step === "email"
                   ? "Enter your admin email to receive a reset code."
-                  : "Enter the code we emailed you and a new password."}
+                  : step === "code"
+                    ? "Enter the 6-digit code we emailed you."
+                    : "Now choose a new password."}
             </p>
 
             {/* ---------------- Sign in ---------------- */}
@@ -287,9 +352,9 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* ---------------- Forgot: step 2 (otp + new password) ---------------- */}
-            {mode === "forgot" && step === "reset" && (
-              <form onSubmit={doReset} className="mt-8 space-y-5">
+            {/* ---------------- Forgot: step 2 (code only, with timer) ---------------- */}
+            {mode === "forgot" && step === "code" && (
+              <form onSubmit={continueToPassword} className="mt-8 space-y-5">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-white/90">
                     6-digit code
@@ -307,12 +372,39 @@ export default function LoginPage() {
                         setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
                       }
                       placeholder="Enter the code from your email"
+                      autoFocus
                       required
                       className={inputCls + " tracking-[0.3em]"}
                     />
                   </div>
+                  {/* Countdown / resend */}
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-white/70">
+                      {secondsLeft > 0
+                        ? `Code valid — resend in ${mmss}`
+                        : "Didn't get the code?"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resend}
+                      disabled={secondsLeft > 0 || loading}
+                      className="font-medium text-[#E0B274] transition enabled:hover:text-[#f3d29a] disabled:opacity-40"
+                    >
+                      Resend code
+                    </button>
+                  </div>
                 </div>
 
+                <Messages error={error} notice={notice} />
+
+                <SubmitButton loading={false} label="Continue" busy="…" />
+                <BackLink onClick={backToLogin} />
+              </form>
+            )}
+
+            {/* ---------------- Forgot: step 3 (new password) ---------------- */}
+            {mode === "forgot" && step === "password" && (
+              <form onSubmit={doReset} className="mt-8 space-y-5">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-white/90">
                     New password
@@ -328,6 +420,7 @@ export default function LoginPage() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="At least 8 characters"
                       autoComplete="new-password"
+                      autoFocus
                       required
                       className={inputCls + " pr-11"}
                     />
@@ -370,10 +463,13 @@ export default function LoginPage() {
                   <BackLink onClick={backToLogin} inline />
                   <button
                     type="button"
-                    onClick={() => setStep("email")}
+                    onClick={() => {
+                      resetMessages();
+                      setStep("code");
+                    }}
                     className="font-medium text-[#E0B274] transition hover:text-[#f3d29a]"
                   >
-                    Resend code
+                    Change code
                   </button>
                 </div>
               </form>
