@@ -235,6 +235,32 @@ export class AuthService {
     return this.publicUser(user);
   }
 
+  /**
+   * Change the login email. Gated by the current password (account-takeover
+   * sensitive). The new address becomes the login identity immediately and is
+   * marked verified — an admin who can prove the password is trusted to own it,
+   * and the existing JWT keeps working because it is keyed on the user id, not
+   * the email. Rejects an address already in use by another account.
+   */
+  async changeEmail(userId: string, currentPassword: string, newEmail: string) {
+    const email = newEmail.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+    if (email === user.email.toLowerCase()) {
+      // No-op change — return the current user so the UI just refreshes.
+      return this.publicUser(user);
+    }
+    const clash = await this.prisma.user.findUnique({ where: { email } });
+    if (clash) throw new ConflictException('That email is already in use');
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { email, emailVerified: true },
+    });
+    return this.publicUser(updated);
+  }
+
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     if (!newPassword || newPassword.length < 8)
       throw new UnauthorizedException('New password must be at least 8 characters');

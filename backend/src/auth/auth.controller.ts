@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto, ResendVerificationDto } from './dto/verify-email.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangeEmailDto } from './dto/change-email.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { JwtUser } from './decorators/current-user.decorator';
@@ -66,6 +67,12 @@ export class AuthController {
   @Patch('profile')
   updateProfile(@CurrentUser() user: JwtUser, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('email')
+  changeEmail(@CurrentUser() user: JwtUser, @Body() dto: ChangeEmailDto) {
+    return this.auth.changeEmail(user.id, dto.currentPassword, dto.newEmail);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -1,0 +1,179 @@
+========================================================================
+ ROSYNX — PAYMENTS & GO-LIVE GUIDE (for the stakeholder)
+ Last updated: 2026-08-06
+========================================================================
+
+This note explains, in plain language:
+  1. How payments work RIGHT NOW (customer side + admin side)
+  2. What we need to accept AUTOMATIC card/wallet payments in future
+     (accounts, cost to set up, cost per sale, best option for a startup)
+  3. What HOSTING + DOMAIN to buy to make the site fully production-ready
+
+------------------------------------------------------------------------
+ 1. PAYMENT METHODS TODAY  (already working)
+------------------------------------------------------------------------
+
+There are TWO sides to payments. Please keep them separate in your mind:
+
+  • ADMIN side  = YOU set which methods to offer, and enter the accounts
+                  where money should be RECEIVED.
+                  (Admin panel  ->  Settings  ->  "Payment methods")
+
+  • CUSTOMER side = The shopper only sees the methods you switched ON, and
+                    pays into the accounts you entered.
+                    (Store  ->  Checkout  ->  "Payment Method")
+
+So the payment section you saw in the Admin Settings is the ADMIN control.
+Whatever you enable + fill there is what the customer sees at checkout.
+
+WHAT WORKS TODAY (all 100% functional, no fees, no approval needed):
+
+  1) Cash on Delivery
+       - Customer pays the courier when the parcel arrives. No setup.
+
+  2) Bank Transfer  (e.g. your Meezan Bank account)
+       - You enter Bank name / Account title / Account number / IBAN in
+         Settings. The customer sees those details at checkout, transfers
+         the money from their own bank/app, and types the Transaction ID.
+
+  3) JazzCash  (manual)
+       - You enter your JazzCash number + account title in Settings.
+         Customer sends money to it and enters the Transaction ID.
+
+  4) EasyPaisa  (manual)
+       - Same as JazzCash, with your EasyPaisa number.
+
+HOW A MANUAL PAYMENT ORDER FLOWS:
+  Customer pays -> enters Transaction ID -> order is created as "On hold"
+  -> you see the Transaction ID in Admin -> Orders -> you confirm the money
+  arrived in your account -> you change the order to "Processing/Paid".
+  (This is the safe, standard way for a new store — you verify every payment.)
+
+IMPORTANT NOTE ABOUT THE CARD OPTION:
+  The old "Debit / Credit Card (sandbox mode)" you saw was a TEST/demo only —
+  it could NOT actually charge a real card. We have now HIDDEN it from the
+  customer so no one is misled. Real card payments require a licensed payment
+  gateway (see section 2). The switch stays in Admin Settings ("Card — needs
+  setup") and we turn it on the moment a real gateway is connected.
+
+WHY WE DON'T COLLECT CARD NUMBERS DIRECTLY:
+  By law (and card-network rules called "PCI-DSS") a normal business is NOT
+  allowed to take and store customers' raw card numbers on its own website.
+  That is exactly what a payment gateway is for — the customer types their
+  card on the gateway's secure page, and the money lands in your account.
+
+------------------------------------------------------------------------
+ 2. AUTOMATIC PAYMENTS (production-ready) — cards + wallets in one click
+------------------------------------------------------------------------
+
+To let customers pay by card / JazzCash / EasyPaisa INSTANTLY and
+automatically (money straight to your account, order auto-confirmed), you
+sign up with a licensed "payment gateway / aggregator". An AGGREGATOR is the
+all-in-one option: ONE account gives you Visa/Mastercard + JazzCash +
+EasyPaisa + bank — you don't chase each one separately.
+
+WHAT YOU MUST PROVIDE TO GET APPROVED (KYC — same for all of them):
+  - Registered business name (sole proprietor is fine to start)
+  - NTN (tax number from FBR)
+  - Business bank account (where your sales money is deposited)
+  - CNIC of the owner
+  - The live website + basic details
+  - Approval usually takes ~3 days to ~2 weeks.
+
+THE MAIN OPTIONS IN PAKISTAN:
+
+  A) SAFEPAY   (getsafepay.com)   <-- RECOMMENDED for a new startup
+       - Modern, easy to sign up, developer-friendly (fast for us to wire).
+       - Accepts cards + wallets.
+       - Setup fee: none / very low.
+       - Per sale: roughly ~2.9% + a small fixed fee (confirm current rate).
+       - Best balance of easy onboarding + reliability + low cost.
+
+  B) PAYFAST   (by Bank Alfalah)   <-- best LOCAL coverage, all-in-one
+       - One integration = cards + JazzCash + EasyPaisa + bank transfer.
+       - Setup fee: a one-time fee may apply (confirm).
+       - Per sale: roughly ~2%–3% (varies by method; confirm current rate).
+       - Great if most of your customers use JazzCash/EasyPaisa.
+
+  C) PAYMOB PAKISTAN   (paymob.com)
+       - Aggregator, cards + wallets. Similar pricing. Good alternative.
+       - (Our code already has a Paymob "slot" ready — quickest to switch on
+         if you choose Paymob.)
+
+  Direct JazzCash / EasyPaisa MERCHANT accounts also exist (~1.5%–2.5% per
+  sale), but that's TWO separate integrations instead of one aggregator, so
+  more paperwork for slightly lower fees.
+
+MY RECOMMENDATION (cost-effective + reliable + easiest for a small startup):
+  -> Start with SAFEPAY for the smoothest sign-up and clean pricing.
+     If your buyers are mostly JazzCash/EasyPaisa users, choose PAYFAST
+     instead for the widest local wallet coverage in one account.
+  Either way it's ONE aggregator account, and once you send us the API keys
+  we switch on real card/wallet checkout (usually within a day of testing).
+
+ROUGH COST SUMMARY FOR AUTOMATIC PAYMENTS:
+  - To set up:     usually FREE or a small one-time fee.
+  - Per sale:      ~2%–3% of the order (this is normal worldwide).
+  - Monthly:       none (you only pay a % when you actually make a sale).
+  (Please confirm the exact live rates on the provider's website before
+   signing — they change from time to time.)
+
+------------------------------------------------------------------------
+ 3. HOSTING + DOMAIN — what to buy to go fully production-ready
+------------------------------------------------------------------------
+
+The site is built as 3 parts. Here is where each should live for a real,
+reliable launch, with cost-effective picks for a startup.
+
+  DOMAIN NAME (your web address, e.g. rosynx.com)
+     - Buy a ".com" — best for brand + customer trust worldwide.
+       Recommended registrar: Namecheap or Cloudflare (~$10–13 / year).
+     - Optional: also grab ".pk" / ".com.pk" from PKNIC (~Rs 2,000–4,000 for
+       2 years) if you want the local identity too.
+     -> RECOMMENDATION: buy rosynx.com (~$12/year). Cheap, one-time yearly.
+
+  STOREFRONT + ADMIN PANEL  (the two Next.js sites)
+     - Host: VERCEL (where they already run).
+       * Free "Hobby" plan is fine for testing and light traffic.
+       * "Pro" plan is $20/month — get it only when you have real commercial
+         traffic or need a custom domain with team features.
+     - Very reliable, fast, and no server maintenance for you.
+
+  BACKEND / API + DATABASE
+     - Backend host: RENDER.
+       * Free plan works but "sleeps" when idle (first visit is slow ~10s).
+       * Upgrade to RENDER STARTER = $7/month -> always on, no slow starts.
+         This is the single most worthwhile upgrade for a live store.
+     - Database: NEON (PostgreSQL).
+       * Free plan is okay to launch; it "pauses" when idle.
+       * Paid plan (~$19/month) when traffic grows -> always on + backups.
+     - Email: BREVO — free for 300 emails/day (order + reset emails). Paid
+       (~$9/month) only if you send more. No domain purchase required.
+     - Product images: CLOUDINARY free tier is enough to start.
+
+  ---------------------------------------------------------------
+  RECOMMENDED STARTER SETUP (reliable + cheapest to be "real"):
+     Domain (Namecheap .com) ........... ~$12 / year   (~$1/month)
+     Storefront + Admin (Vercel Free) .. $0
+     Backend (Render Starter) .......... $7 / month
+     Database (Neon Free for now) ...... $0
+     Email (Brevo Free) ................ $0
+     ---------------------------------------------------------
+     TOTAL to go live properly:  about $7 / month + ~$12 / year domain.
+
+  When sales grow, upgrade in this order: Neon paid ($19) -> Vercel Pro ($20).
+  A comfortable "growing store" setup lands around $30–45 / month total.
+  ---------------------------------------------------------------
+
+------------------------------------------------------------------------
+ WHAT WE NEED FROM YOU (checklist)
+------------------------------------------------------------------------
+  [ ] Decide the domain name and buy it (we'll connect it).
+  [ ] Approve the $7/month backend upgrade so the store is always fast.
+  [ ] For automatic payments: pick Safepay OR PayFast, complete their
+      sign-up with your business docs, and send us the API keys.
+  [ ] For now, in Admin -> Settings, enable Bank/JazzCash/EasyPaisa and fill
+      your real account details so customers can pay you today.
+
+Any questions on the above — just ask and we'll walk you through it.
+========================================================================

@@ -309,12 +309,11 @@ export default function CheckoutPage() {
         label: "EasyPaisa",
         caption: "Send to our EasyPaisa account, then enter the transaction ID",
       });
-    if (settings?.cardEnabled)
-      opts.push({
-        value: "CARD",
-        label: "Debit / Credit Card",
-        caption: "Secure card payment (sandbox mode)",
-      });
+    // Online card payments are intentionally hidden until a real, licensed
+    // gateway (Safepay / PayFast / Paymob) is connected. The old option ran in
+    // sandbox mode and could not actually charge a customer's card, so showing
+    // it to real shoppers was misleading. The admin "Card" toggle stays in
+    // Settings so this can be switched on the moment a gateway is live.
     return opts;
   }, [settings]);
 
